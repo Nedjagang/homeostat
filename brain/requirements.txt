@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+anthropic
+httpx        # SigNoz MCP / Query API calls
+# mcp        # if using an MCP client library for the tool loop

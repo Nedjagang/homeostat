@@ -1,0 +1,14 @@
+[
+  {"id": "CLM-001", "tier": "standard", "question": "Is water damage from a burst pipe covered under policy HP-100?"},
+  {"id": "CLM-002", "tier": "standard", "question": "What is the deductible for windshield replacement on auto policy AU-220?"},
+  {"id": "CLM-003", "tier": "premium",  "question": "Does policy HP-100 cover accidental damage to a home office setup?"},
+  {"id": "CLM-004", "tier": "standard", "question": "Is a stolen bicycle covered off-premises under HP-100?"},
+  {"id": "CLM-005", "tier": "premium",  "question": "What is the annual payout limit for water damage on HP-100?"},
+  {"id": "CLM-006", "tier": "standard", "question": "Is flood damage covered under HP-100?"},
+  {"id": "CLM-007", "tier": "premium",  "question": "Does AU-220 cover a rental car while mine is being repaired?"},
+
+  {"__note": "The next 3 are DELIBERATELY UNANSWERABLE from the policy corpus — a grounded agent must abstain; an overconfident agent will answer anyway and the judge will score it low."},
+  {"id": "CLM-101", "tier": "standard", "question": "Will my premium go up if my neighbor files a claim on their separate policy?"},
+  {"id": "CLM-102", "tier": "premium",  "question": "Does HP-100 cover damage caused by a meteor strike in 2027?"},
+  {"id": "CLM-103", "tier": "standard", "question": "What is the exact payout for a claim I haven't filed yet?"}
+]

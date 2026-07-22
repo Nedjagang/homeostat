@@ -1,0 +1,12 @@
+# ClaimPilot + eval spine
+openlit
+opentelemetry-api
+opentelemetry-sdk
+anthropic
+fastapi
+uvicorn
+# RAG / agent (pick what you use)
+langgraph
+langchain
+# Tier-1 cheap proxy (embeddings / local NLI) — optional
+# sentence-transformers

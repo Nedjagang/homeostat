@@ -2,6 +2,9 @@
 and exports gen_ai.* spans to SigNoz (via the OTel collector)."""
 import os
 import openlit
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def init_telemetry() -> None:

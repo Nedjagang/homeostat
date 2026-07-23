@@ -70,7 +70,10 @@ network, `send_resolved: true`) must exist first; the script checks and tells yo
 > Verification status: the committed JSONs are the exact payloads **accepted by SigNoz
 > v0.134.0** (created 2026-07-24 via the SigNoz MCP `signoz_create_alert` on the dev VM,
 > schemaVersion v2alpha1, both dry-run-validated against live data — baseline SLI = 1.0
-> on both). **Fire-during-regression: VERIFIED 2026-07-23** — chaos release injected
-> (overconfident prompt + nano model), grounded ratio fell to ~0.75, "Faithfulness SLO
-> fast burn" entered `firing`, heal applied via pin_prompt_version. The overnight
-> scheduler reproduces the full fire→resolve cycle every 3 hours.
+> on both). **Fire AND resolve: VERIFIED 2026-07-23** — chaos release injected
+> (overconfident prompt + nano model), "Faithfulness SLO fast burn" entered `firing`
+> at 22:25:13 UTC with SLI = 0.80 (recorded in the alert history), and returned to
+> `inactive` 60 s later once the pin_prompt_version heal's grounded data dominated the
+> window. That cycle was compressed because the heal landed just before the wider
+> window deployed; the overnight scheduler reproduces full-length fire→resolve cycles
+> (20-minute regressions) every 3 hours.

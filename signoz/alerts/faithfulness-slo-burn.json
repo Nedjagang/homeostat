@@ -70,7 +70,7 @@
       ]
     }
   },
-  "evaluation": {"kind": "rolling", "spec": {"evalWindow": "5m", "frequency": "1m"}},
+  "evaluation": {"kind": "rolling", "spec": {"evalWindow": "10m", "frequency": "1m"}},
   "notificationSettings": {"renotify": {"enabled": false, "interval": "30m"}, "usePolicy": false},
   "labels": {
     "severity": "critical",

@@ -20,10 +20,14 @@ burn-rate math — not a hardcoded "score < 0.5" alert.
 ## SLO and burn rate
 
 - **SLO: 98% of claims grounded** (2% error budget).
-- **Fast-burn rule** (`faithfulness-slo-burn.json`): fire when the 5-minute grounded
+- **Fast-burn rule** (`faithfulness-slo-burn.json`): fire when the 10-minute grounded
   ratio drops below **0.85** — a burn rate of `(1 − 0.85) / 0.02 = 7.5×` budget burn.
-- **Absolute floor** (`faithfulness-floor.json`): fire when the 5-minute average score
+- **Absolute floor** (`faithfulness-floor.json`): fire when the 10-minute average score
   drops below **0.80** — the backstop for uniform quality sag.
+- **Why 10m, not 5m** (measured, first fire test): at ~1 claim/minute a 5m window holds
+  ~5–6 claims, and shuffle clumping kept the window ratio above 0.85 through a real
+  regression (observed 0.87 over one stretch). Doubling the window halves the variance;
+  the threshold stays as calibrated. If claim volume rises 10×, shrink the window back.
 - Roadmap (documented, not yet built): a slow-burn companion (1h window, ~2× burn) for
   sustained low-grade regressions, once the demo cadence isn't the constraint.
 
@@ -66,4 +70,7 @@ network, `send_resolved: true`) must exist first; the script checks and tells yo
 > Verification status: the committed JSONs are the exact payloads **accepted by SigNoz
 > v0.134.0** (created 2026-07-24 via the SigNoz MCP `signoz_create_alert` on the dev VM,
 > schemaVersion v2alpha1, both dry-run-validated against live data — baseline SLI = 1.0
-> on both). Fire-during-regression test: in progress.
+> on both). **Fire-during-regression: VERIFIED 2026-07-23** — chaos release injected
+> (overconfident prompt + nano model), grounded ratio fell to ~0.75, "Faithfulness SLO
+> fast burn" entered `firing`, heal applied via pin_prompt_version. The overnight
+> scheduler reproduces the full fire→resolve cycle every 3 hours.

@@ -1,0 +1,28 @@
+# Host-specific port remap for the Foundry-generated SigNoz compose file.
+#
+# `foundryctl forge` regenerates pours/deployment/compose.yaml from scratch every time and
+# that whole directory is git-ignored (it's build output, not source) — so this file lives
+# here instead, and is passed explicitly on the docker compose command line:
+#
+#   foundryctl gauge -f casting.yaml
+#   foundryctl forge -f casting.yaml
+#   docker compose -f pours/deployment/compose.yaml -f signoz/compose.override.yaml up -d
+#
+# Why not `foundryctl cast`? `cast` runs `docker compose up` internally without knowing
+# about this override, so it reintroduces the port conflict below. Use gauge+forge from
+# foundryctl (correctness, version pinning) and plain `docker compose up` with both files
+# for the actual start.
+#
+# Port 8080 (Foundry's hardcoded default — not configurable via casting.yaml, see
+# SigNoz/foundry's compose.yaml.gotmpl) collides with other services on this host.
+# 8090/8091 are reserved for the brain webhook and claimpilot /control (see
+# signoz/README.md, brain/main.py, claimpilot/control.py) — pick a different port here if
+# 8089 also collides on your machine.
+#
+# The `!override` tag (not a plain list) is required: docker compose merges list fields by
+# concatenation by default, so a plain `ports:` override here would ADD "8089:8080"
+# alongside the base file's "8080:8080" instead of replacing it, and the conflict returns.
+services:
+  signoz-signoz-0:
+    ports: !override
+      - "8089:8080"

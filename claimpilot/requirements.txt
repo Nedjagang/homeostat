@@ -2,11 +2,13 @@
 openlit
 opentelemetry-api
 opentelemetry-sdk
-anthropic
+openai
 fastapi
 uvicorn
-# RAG / agent (pick what you use)
+python-dotenv
+# RAG / agent
 langgraph
 langchain
-# Tier-1 cheap proxy (embeddings / local NLI) — optional
+langchain-openai
+# Tier-1 cheap proxy (embeddings / local NLI) — optional, not wired yet
 # sentence-transformers

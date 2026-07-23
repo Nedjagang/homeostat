@@ -4,7 +4,7 @@
    *"We were monitoring the wrong layer."*
 2. **Reveal** `agent-quality.json`; faithfulness is dipping.
 3. **Money shot (deterministic — lead here if anything is shaky):** Query Builder →
-   `gen_ai.evaluation.score < 0.5` → click → the exact lying span: prompt + RAG chunks + judge
+   `gen_ai.evaluation.score.value < 0.5` → click → the exact lying span: prompt + RAG chunks + judge
    reason. Pivot to the correlated WARN log (`trace_id`).
 4. **Trigger:** flip `CHAOS_PROMPT_OVERCONFIDENT`. Faithfulness SLI breaches SLO; latency/tokens
    stay green. The **burn-rate alert** fires (window pre-tightened for the demo).

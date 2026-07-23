@@ -10,9 +10,11 @@ queries stay fast at scale and every claim is backed by a link.
 3. Never issue an unbounded full-table query. If a default returns nothing, narrow — don't widen.
 
 ## The core investigation (prompt regression)
-1. From the alert window, pull spans where `gen_ai.evaluation.score < 0.5` (bounded).
-2. Group them by `prompt.version`. If the low-score spans concentrate on ONE version, that version
-   is the suspect. Compare against the prior window's dominant version.
+1. Chart the `gen_ai.evaluation.score` metric grouped by its `prompt.version` label over the alert
+   window — if the drop concentrates on ONE version, that version is the suspect. Compare against
+   the prior window's dominant version.
+2. Drill the hypothesis on spans: pull spans where `gen_ai.evaluation.score.value < 0.5` (bounded)
+   and confirm they share that `prompt.version`.
 3. Confirm with a second signal: the WARN logs (`unsupported answer`) carry the same
    `prompt_version` and link to the same `trace_id`s.
 4. Confirm the **traditional** signals (latency/tokens/errors) did NOT move — this is a quality

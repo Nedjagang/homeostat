@@ -1,0 +1,87 @@
+{
+  "alert": "Faithfulness SLO fast burn — claimpilot",
+  "alertType": "METRIC_BASED_ALERT",
+  "ruleType": "threshold_rule",
+  "schemaVersion": "v2alpha1",
+  "version": "v5",
+  "description": "SLO: 98% of claims grounded. Fires when the 5m grounded-verdict ratio burns the 2% error budget at 7.5x (ratio < 0.85). SLI = rate(gen_ai.evaluation.verdicts{label=grounded}) / rate(all verdicts). Calibration and design: signoz/alerts/faithfulness-slo.md",
+  "condition": {
+    "compositeQuery": {
+      "queryType": "builder",
+      "panelType": "graph",
+      "queries": [
+        {
+          "type": "builder_query",
+          "spec": {
+            "name": "A",
+            "signal": "metrics",
+            "stepInterval": 60,
+            "disabled": true,
+            "aggregations": [
+              {"metricName": "gen_ai.evaluation.verdicts", "timeAggregation": "rate", "spaceAggregation": "sum"}
+            ],
+            "filter": {"expression": "service.name = 'claimpilot' AND label = 'grounded'"},
+            "legend": "grounded verdicts/sec",
+            "limit": 10000,
+            "order": [{"key": {"name": "__result"}, "direction": "desc"}]
+          }
+        },
+        {
+          "type": "builder_query",
+          "spec": {
+            "name": "B",
+            "signal": "metrics",
+            "stepInterval": 60,
+            "disabled": true,
+            "aggregations": [
+              {"metricName": "gen_ai.evaluation.verdicts", "timeAggregation": "rate", "spaceAggregation": "sum"}
+            ],
+            "filter": {"expression": "service.name = 'claimpilot'"},
+            "legend": "all verdicts/sec",
+            "limit": 10000,
+            "order": [{"key": {"name": "__result"}, "direction": "desc"}]
+          }
+        },
+        {
+          "type": "builder_formula",
+          "spec": {
+            "name": "F1",
+            "expression": "A/B",
+            "disabled": false,
+            "legend": "grounded ratio (SLI)",
+            "limit": 100,
+            "order": [{"key": {"name": "__result"}, "direction": "desc"}]
+          }
+        }
+      ]
+    },
+    "selectedQueryName": "F1",
+    "thresholds": {
+      "kind": "basic",
+      "spec": [
+        {
+          "name": "critical",
+          "target": 0.85,
+          "recoveryTarget": null,
+          "op": "below",
+          "matchType": "on_average",
+          "channels": ["homeostat-brain"]
+        }
+      ]
+    }
+  },
+  "evaluation": {"kind": "rolling", "spec": {"evalWindow": "5m", "frequency": "1m"}},
+  "notificationSettings": {"renotify": {"enabled": false, "interval": "30m"}, "usePolicy": false},
+  "labels": {
+    "severity": "critical",
+    "service": "claimpilot",
+    "slo": "faithfulness-98pct",
+    "rule": "fast-burn-7.5x",
+    "team": "bunkbros"
+  },
+  "annotations": {
+    "summary": "ClaimPilot faithfulness SLO burning fast: 5m grounded ratio {{$value}} dropped below {{$threshold}} (7.5x burn of the 2% error budget).",
+    "description": "Confident-but-unsupported answers are shipping. Drill: traces where gen_ai.evaluation.score.value < 0.5, group by prompt.version. If latency/tokens/errors stayed green this is a quality regression — likely a prompt change; heal = pin_prompt_version on the ClaimPilot /control API.",
+    "runbook": "homeostat repo: signoz/query-builder-views.md (view 1) + brain/skill.md investigation contract"
+  }
+}

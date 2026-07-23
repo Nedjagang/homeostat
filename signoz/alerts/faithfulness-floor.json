@@ -1,0 +1,87 @@
+{
+  "alert": "Faithfulness absolute floor — claimpilot",
+  "alertType": "METRIC_BASED_ALERT",
+  "ruleType": "threshold_rule",
+  "schemaVersion": "v2alpha1",
+  "version": "v5",
+  "description": "Backstop for the burn-rate rule: fires when the true 5m average faithfulness score drops below 0.80 — catches uniform quality sag where individual verdicts never cross the grounded/unsupported line. SLI = rate(gen_ai.evaluation.score.sum) / rate(gen_ai.evaluation.score.count).",
+  "condition": {
+    "compositeQuery": {
+      "queryType": "builder",
+      "panelType": "graph",
+      "queries": [
+        {
+          "type": "builder_query",
+          "spec": {
+            "name": "A",
+            "signal": "metrics",
+            "stepInterval": 60,
+            "disabled": true,
+            "aggregations": [
+              {"metricName": "gen_ai.evaluation.score.sum", "timeAggregation": "rate", "spaceAggregation": "sum"}
+            ],
+            "filter": {"expression": "service.name = 'claimpilot'"},
+            "legend": "score sum/sec",
+            "limit": 10000,
+            "order": [{"key": {"name": "__result"}, "direction": "desc"}]
+          }
+        },
+        {
+          "type": "builder_query",
+          "spec": {
+            "name": "B",
+            "signal": "metrics",
+            "stepInterval": 60,
+            "disabled": true,
+            "aggregations": [
+              {"metricName": "gen_ai.evaluation.score.count", "timeAggregation": "rate", "spaceAggregation": "sum"}
+            ],
+            "filter": {"expression": "service.name = 'claimpilot'"},
+            "legend": "verdicts/sec",
+            "limit": 10000,
+            "order": [{"key": {"name": "__result"}, "direction": "desc"}]
+          }
+        },
+        {
+          "type": "builder_formula",
+          "spec": {
+            "name": "F1",
+            "expression": "A/B",
+            "disabled": false,
+            "legend": "avg faithfulness (SLI)",
+            "limit": 100,
+            "order": [{"key": {"name": "__result"}, "direction": "desc"}]
+          }
+        }
+      ]
+    },
+    "selectedQueryName": "F1",
+    "thresholds": {
+      "kind": "basic",
+      "spec": [
+        {
+          "name": "critical",
+          "target": 0.8,
+          "recoveryTarget": null,
+          "op": "below",
+          "matchType": "on_average",
+          "channels": ["homeostat-brain"]
+        }
+      ]
+    }
+  },
+  "evaluation": {"kind": "rolling", "spec": {"evalWindow": "5m", "frequency": "1m"}},
+  "notificationSettings": {"renotify": {"enabled": false, "interval": "30m"}, "usePolicy": false},
+  "labels": {
+    "severity": "critical",
+    "service": "claimpilot",
+    "slo": "faithfulness-98pct",
+    "rule": "absolute-floor",
+    "team": "bunkbros"
+  },
+  "annotations": {
+    "summary": "ClaimPilot average faithfulness {{$value}} dropped below the {{$threshold}} absolute floor over 5 minutes.",
+    "description": "True windowed average of the gen_ai.evaluation.score histogram (sum/count). Complements the burn-rate rule: catches every answer degrading at once without verdicts crossing the 0.5 label line. Drill: traces where gen_ai.evaluation.score.value < 0.5, group by prompt.version.",
+    "runbook": "homeostat repo: signoz/query-builder-views.md (view 1) + brain/skill.md investigation contract"
+  }
+}

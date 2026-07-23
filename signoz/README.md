@@ -10,10 +10,14 @@ custom UI. A fresh SigNoz should be able to import these and light up every pane
   tool success/retry, cost by customer tier.
 
 ## Alerts (`alerts/`)
-- `faithfulness-slo.json` — **the headline.** Faithfulness as an SLI: fire on a burn-rate / relative
-  drop vs the rolling baseline, with an absolute floor as a backstop. (Not a hardcoded 0.5.)
-- `cost-velocity.json` — cost/claim vs a rolling baseline.
-- `judge-budget.json` — the eval layer's own cost breaching budget → throttle Tier-2 sampling.
+- **The headline pack** (design + calibration in `alerts/faithfulness-slo.md`):
+  - `faithfulness-slo-burn.json` — SLO 98% grounded; fires when the 5m grounded ratio
+    (`gen_ai.evaluation.verdicts{label=grounded}` / all) burns the error budget at 7.5×.
+  - `faithfulness-floor.json` — absolute floor: 5m average `gen_ai.evaluation.score` < 0.80
+    (backstop for uniform quality sag). (No hardcoded 0.5 anywhere in the alert layer.)
+  - SigNoz has no alert-import UI → push with `python signoz/push-packs.py` (needs `SIGNOZ_API_KEY`).
+- `cost-velocity.json` — cost/claim vs a rolling baseline. *(not built yet)*
+- `judge-budget.json` — the eval layer's own cost breaching budget → throttle Tier-2 sampling. *(not built yet)*
 
 Each alert POSTs a webhook to the brain (`http://<host>:8090/webhook`).
 **Demo tip:** tighten the eval window + Alertmanager group interval so the alert delivers in

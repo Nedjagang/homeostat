@@ -16,21 +16,21 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · **(GATE)** = prove it l
 - [ ] Create your `.env` (git-ignored): LLM keys, `SLACK_WEBHOOK_URL`, `SIGNOZ_API_KEY`, `CLAIMPILOT_CONTROL_URL`.
 
 ### Integration contract (the seams — agree once, don't drift)
-- [ ] Metric: `gen_ai.evaluation.score`, labels = `service.name, eval.name, model, customer.tier, label` (BOUNDED only).
-- [ ] Span attrs: `gen_ai.evaluation.{name,score,label,reason?}`, `prompt.version`, `claim.id`, `customer.tier`.
+- [x] Metric: `gen_ai.evaluation.score` histogram, labels = `service.name, eval.name, model, customer.tier, label, prompt.version` (BOUNDED only; `prompt.version` added deliberately — versions are committed artifacts, and score-by-version is the investigation's key chart). No spec metric for eval scores exists yet.
+- [x] Span attrs, spec-exact per semantic-conventions-genai: `gen_ai.evaluation.{name, score.value, score.label, explanation}` + `gen_ai.prompt.name`, `prompt.version`, `claim.id`, `customer.tier`. Every verdict ALSO emitted as a `gen_ai.evaluation.result` log event (the spec's blessed shape). Plus `claimpilot.claims.processed{outcome}` so failed claims aren't silent holes in the SLI.
 - [ ] Alert webhook JSON → brain `/webhook` (`{alerts:[{status, labels, ...}]}`).
-- [ ] ClaimPilot `/control`: `pin_prompt_version(version)`, `circuit_break(tool)`.
+- [x] ClaimPilot `/control`: `pin_prompt_version(version)`, `circuit_break(tool)`, plus live chaos flips (`POST /control/chaos/{flag}`) — one process with the continuous claim loop, live-tested end-to-end (flip → scores tank → pin → recovery).
 - [ ] Chaos flag names + expected SigNoz signatures (from `chaos/flags.md`).
 
 ---
 
 ## Agent A — Agent & Eval (the moat) + video
-- [ ] `claimpilot/` LangGraph agent: 3–4 tools + RAG over `policies/` (~20 synthetic docs).
-- [ ] Write the ~20 policy docs so the sample claims split (7 answerable, 3 unanswerable).
-- [ ] `telemetry.py` wired; export to the **collector** (`:4318`), not straight to SigNoz.
-- [ ] `prompt.version` on the root span; WARN log on unsupported (carries `trace_id`). **(GATE 1)**
-- [ ] `eval.py` funnel: Tier 0 (deterministic) + Tier 1 (cheap proxy) + Tier 2 (Haiku judge, structured output, `max_tokens≈256`).
-- [ ] Verdict as attributes on the root span + the bounded metric.
+- [~] `claimpilot/` LangGraph agent: 3–4 tools + RAG over `policies/` (~20 synthetic docs). *(runs end-to-end; 2 tools so far)*
+- [x] Write the ~20 policy docs so the sample claims split (7 answerable, 3 unanswerable).
+- [~] `telemetry.py` wired (traces+metrics+logs, truststore, flush-on-exit); currently exporting to the remote SigNoz ingester — switch to the local collector (`:4318`) when the Foundry stack is up.
+- [~] `prompt.version` on the root span; WARN log on unsupported (carries `trace_id`, exports via OTLP). **(GATE 1)** *(emitting clean; still to prove live in the SigNoz UI)*
+- [~] `eval.py` funnel: Tier 0 (deterministic) + Tier 2 judge (gpt-5.6-sol, JSON verdict) wired and proven — baseline all 1.0, overconfident run tanks the 3 unanswerable to 0.0/0.2/0.0. Tier 1 stubbed; judge gating (flagged+2% only) not wired yet.
+- [x] Verdict as attributes on the root span + the bounded metric (contract labels incl. `label`, `model`; judge tokens on `gen_ai.evaluation.judge_tokens`).
 - [ ] **Filter `score<0.5` → drill to the exact lying span with prompt + reason. (GATE 2 — THE MOAT, make it flawless.)**
 - [ ] Funnel routes only flagged + ~2% calibration to the judge; "judge $/1,000" panel data present. **(GATE 2A)**
 - [ ] Self-observe: brain cost + `homeostat.action` visible (with C). **(GATE 6-meta)**
@@ -40,7 +40,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · **(GATE)** = prove it l
 - [ ] SigNoz via Foundry (`gauge → forge → cast`); **commit `casting.yaml` + `casting.yaml.lock`.**
 - [ ] SigNoz MCP server running; API key issued. **(GATE 0)**
 - [ ] `traditional.json` (stays green) + `agent-quality.json` (faithfulness SLI, judge $/1k, etc.).
-- [ ] **`faithfulness-slo.json`**: SLI + SLO + burn-rate/relative-drop alert (+ absolute floor). Not a magic 0.5.
+- [~] **Faithfulness SLO pack**: SLI + SLO (98% grounded) + 7.5× fast-burn rule + absolute floor — authored + calibrated (`signoz/alerts/faithfulness-slo.md`), pushable via `signoz/push-packs.py`. Pending: SIGNOZ_API_KEY, live push, fire-during-regression verification, slow-burn companion.
 - [ ] `cost-velocity.json` + `judge-budget.json`; all webhook the brain.
 - [ ] Webhook channel configured + **Test** passes; tighten window/group-interval for the demo.
 - [ ] Log↔span correlation: WARN `unsupported answer` pivots to the failing span.

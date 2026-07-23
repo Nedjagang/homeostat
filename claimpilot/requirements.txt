@@ -6,6 +6,9 @@ openai
 fastapi
 uvicorn
 python-dotenv
+# SSL verification against the OS trust store (internal https OTLP endpoints whose
+# CA chain isn't in certifi)
+truststore
 # RAG / agent
 langgraph
 langchain

@@ -118,12 +118,20 @@ span attribute, and judge token spend is its own metric — the eval layer's cos
 the same dashboard as the quality it buys.
 
 `[SCREENSHOT: verdicts-by-eval-tier pie + judge token panel before/after funnel]`
-`[NUMBERS: measured judge-share % and token spend from the funnel verification window]`
+
+Measured live: at healthy baseline the funnel cleared **8 of 11 claims without a judge
+call** (~27% judge share, down from 100%), and a 13-minute chaos window under the funnel
+still dragged the grounded ratio to **0.80** — below the alert threshold. The gating
+saves money without blinding the alert.
 
 And the judge is treated as a **measured signal, not ground truth**: the repo ships a
 calibration set (question, context, answer, judge verdict) with independent labels and
-an agreement report (`chaos/calibration/report.md`).
-`[NUMBERS: agreement % + confusion matrix from the calibration report]`
+an agreement report (`chaos/calibration/report.md`): **95% agreement (38/40), Cohen's
+κ = 0.80, judge precision on `unsupported` 5/5 — zero false alarms — recall 5/7.** The
+two misses are the interesting part: both are *relevance dodges* — answers whose every
+sentence is context-true but which answer a different question than asked. Those evade
+a faithfulness-only judge AND lexical overlap by construction; `answer_relevance` as a
+second named evaluation is the documented next step.
 
 ## The brain: restraint as a feature
 
@@ -170,7 +178,10 @@ Verdicts use the exact OTel GenAI semantic-convention names — `gen_ai.evaluati
 `gen_ai.evaluation.explanation` — and every verdict is *also* emitted as a
 `gen_ai.evaluation.result` log event, the emission shape the conventions standardize.
 The metrics are ours (the spec defines no evaluation metric yet), with deliberately
-bounded labels. `[NUMBERS: loadgen cardinality before/after]`
+bounded labels — and we tested the claim: a 100-claim replay at concurrency 5 (3.2
+minutes, 0 errors) created **zero new metric series dimensions**; the only cardinality
+delta was one `service.instance.id` for the loadgen process itself. Claim ids, trace
+ids, and judge explanations live on spans and events, where high cardinality belongs.
 
 ## Limits, honestly — and future work
 

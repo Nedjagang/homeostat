@@ -82,9 +82,12 @@ def run_agent(claim: dict, system_prompt: str) -> tuple[str, str]:
     # non-default temperature and max_tokens, so neither is passed. The deployment comes
     # from the active RELEASE (chaos.active_model()): the v_overconfident release also
     # downgrades the model, which is what actually makes it hallucinate.
+    # timeout is NOT optional: the default (none) blocked the claim loop forever on a
+    # dead socket after a laptop suspend/VPN drop — a daemon thread stuck on an
+    # infinite read looks "alive" while processing nothing (2026-07-24 incident).
     endpoint = os.environ["AZURE_OPENAI_ENDPOINT"].rstrip("/")
     model = ChatOpenAI(model=chaos.active_model(), api_key=os.environ["AZURE_OPENAI_API_KEY"],
-                       base_url=f"{endpoint}/openai/v1/")
+                       base_url=f"{endpoint}/openai/v1/", timeout=120, max_retries=2)
     graph = create_agent(model, tools=[lookup_policy, list_exclusions], system_prompt=system_prompt)
     result = graph.invoke({"messages": [("user", claim["question"])]})
     messages = result["messages"]

@@ -96,8 +96,10 @@ def _client() -> OpenAI:
     global _judge_client
     if _judge_client is None:
         endpoint = os.environ["AZURE_OPENAI_ENDPOINT"].rstrip("/")
+        # Explicit timeout — a hung judge call must fail (and fall back to Tier 0)
+        # rather than freeze the claim loop; see the 2026-07-24 hang incident.
         _judge_client = OpenAI(api_key=os.environ["AZURE_OPENAI_API_KEY"],
-                               base_url=f"{endpoint}/openai/v1/")
+                               base_url=f"{endpoint}/openai/v1/", timeout=90, max_retries=2)
     return _judge_client
 
 

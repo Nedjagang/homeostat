@@ -85,6 +85,13 @@ def init_telemetry() -> None:
     # Our own loggers must pass INFO (the gen_ai.evaluation.result events) while the
     # root stays at WARNING so third-party libraries (httpx et al.) don't flood SigNoz.
     logging.getLogger("claimpilot").setLevel(logging.INFO)
+    # Failures must ALSO land locally (stderr -> the service's err log). During the
+    # 2026-07-24 incident everything went only to the OTLP pipeline — which was down
+    # with the same network that caused the failures, leaving zero local evidence.
+    console = logging.StreamHandler()
+    console.setLevel(logging.WARNING)
+    console.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    logging.getLogger("claimpilot").addHandler(console)
 
     openlit.init(
         application_name=SERVICE_NAME,   # -> service.name in SigNoz

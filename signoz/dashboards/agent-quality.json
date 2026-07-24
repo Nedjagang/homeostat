@@ -1,709 +1,868 @@
 {
-  "description": "Faithfulness as a golden signal: the average eval score and grounded-verdict SLO ratio for the claimpilot service, split by prompt version, plus the eval layer's own cost. This is the dashboard that turns red when the agent lies while everything traditional stays green.",
-  "layout": [
-    {
-      "h": 7,
-      "i": "aq-sli-avg",
-      "w": 6,
-      "x": 0,
-      "y": 0
-    },
-    {
-      "h": 7,
-      "i": "aq-grounded-ratio",
-      "w": 6,
-      "x": 6,
-      "y": 0
-    },
-    {
-      "h": 7,
-      "i": "aq-by-version",
-      "w": 6,
-      "x": 0,
-      "y": 7
-    },
-    {
-      "h": 7,
-      "i": "aq-unsupported",
-      "w": 6,
-      "x": 6,
-      "y": 7
-    },
-    {
-      "h": 7,
-      "i": "aq-judge-tokens",
-      "w": 6,
-      "x": 0,
-      "y": 14
-    },
-    {
-      "h": 7,
-      "i": "aq-cost",
-      "w": 6,
-      "x": 6,
-      "y": 14
-    },
-    {
-      "h": 6,
-      "i": "aq-tier-pie",
-      "w": 6,
-      "x": 0,
-      "y": 21
-    },
-    {
-      "h": 7,
-      "i": "aq-claims-outcome",
-      "w": 6,
-      "x": 6,
-      "y": 21
-    }
-  ],
+  "schemaVersion": "v6",
+  "name": "claimpilot-agent-quality",
   "tags": [
-    "homeostat",
-    "claimpilot",
-    "gen-ai",
-    "quality"
-  ],
-  "title": "ClaimPilot — Agent Quality",
-  "variables": {},
-  "version": "v5",
-  "widgets": [
     {
-      "contextLinks": {
-        "linksData": []
-      },
-      "description": "True windowed average of gen_ai.evaluation.score (rate of .sum / rate of .count). The golden signal: drops on quality regressions while every traditional signal stays green.",
-      "fillSpans": false,
-      "id": "aq-sli-avg",
-      "legendPosition": "bottom",
-      "nullZeroValues": "zero",
-      "opacity": "1",
-      "panelTypes": "graph",
-      "query": {
-        "builder": {
-          "queryData": [
-            {
-              "aggregations": [
-                {
-                  "metricName": "gen_ai.evaluation.score.sum",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "rate"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": true,
-              "expression": "A",
-              "filter": {
-                "expression": "service.name = 'claimpilot'"
-              },
-              "functions": [],
-              "groupBy": [],
-              "having": [],
-              "legend": "",
-              "limit": 10000,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "A",
-              "selectColumns": [],
-              "stepInterval": 60
-            },
-            {
-              "aggregations": [
-                {
-                  "metricName": "gen_ai.evaluation.score.count",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "rate"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": true,
-              "expression": "B",
-              "filter": {
-                "expression": "service.name = 'claimpilot'"
-              },
-              "functions": [],
-              "groupBy": [],
-              "having": [],
-              "legend": "",
-              "limit": 10000,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "B",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ],
-          "queryFormulas": [
-            {
-              "aggregations": [],
-              "dataSource": "metrics",
-              "disabled": false,
-              "expression": "A/B",
-              "functions": [],
-              "groupBy": [],
-              "having": [],
-              "legend": "avg faithfulness",
-              "limit": 100,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "F1",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ]
-        },
-        "id": "1bf4ff6e-6a74-44d8-b22c-de5f7a05c0b4",
-        "queryType": "builder"
-      },
-      "selectedLogFields": [],
-      "selectedTracesFields": [],
-      "softMax": 1,
-      "softMin": 0,
-      "timePreferance": "GLOBAL_TIME",
-      "title": "Faithfulness SLI — average score (0..1)",
-      "yAxisUnit": "none"
+      "key": "project",
+      "value": "homeostat"
     },
     {
-      "contextLinks": {
-        "linksData": []
-      },
-      "description": "rate(gen_ai.evaluation.verdicts{label=grounded}) / rate(all verdicts). SLO 98% grounded; the fast-burn alert fires below 0.85 over 10m.",
-      "fillSpans": false,
-      "id": "aq-grounded-ratio",
-      "legendPosition": "bottom",
-      "nullZeroValues": "zero",
-      "opacity": "1",
-      "panelTypes": "graph",
-      "query": {
-        "builder": {
-          "queryData": [
-            {
-              "aggregations": [
-                {
-                  "metricName": "gen_ai.evaluation.verdicts",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "rate"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": true,
-              "expression": "A",
-              "filter": {
-                "expression": "service.name = 'claimpilot' AND label = 'grounded'"
-              },
-              "functions": [],
-              "groupBy": [],
-              "having": [],
-              "legend": "",
-              "limit": 10000,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "A",
-              "selectColumns": [],
-              "stepInterval": 60
-            },
-            {
-              "aggregations": [
-                {
-                  "metricName": "gen_ai.evaluation.verdicts",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "rate"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": true,
-              "expression": "B",
-              "filter": {
-                "expression": "service.name = 'claimpilot'"
-              },
-              "functions": [],
-              "groupBy": [],
-              "having": [],
-              "legend": "",
-              "limit": 10000,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "B",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ],
-          "queryFormulas": [
-            {
-              "aggregations": [],
-              "dataSource": "metrics",
-              "disabled": false,
-              "expression": "A/B",
-              "functions": [],
-              "groupBy": [],
-              "having": [],
-              "legend": "grounded ratio",
-              "limit": 100,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "F1",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ]
-        },
-        "id": "81a38198-483c-456a-abe7-f9025ca9fa35",
-        "queryType": "builder"
-      },
-      "selectedLogFields": [],
-      "selectedTracesFields": [],
-      "softMax": 1,
-      "softMin": 0,
-      "timePreferance": "GLOBAL_TIME",
-      "title": "Grounded-verdict ratio (SLO SLI)",
-      "yAxisUnit": "none"
+      "key": "service",
+      "value": "claimpilot"
     },
     {
-      "contextLinks": {
-        "linksData": []
-      },
-      "description": "Average score split by prompt.version — the regression concentrates on one version; this chart is the investigation's key evidence.",
-      "fillSpans": false,
-      "id": "aq-by-version",
-      "legendPosition": "bottom",
-      "nullZeroValues": "zero",
-      "opacity": "1",
-      "panelTypes": "graph",
-      "query": {
-        "builder": {
-          "queryData": [
-            {
-              "aggregations": [
-                {
-                  "metricName": "gen_ai.evaluation.score.sum",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "rate"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": true,
-              "expression": "A",
-              "filter": {
-                "expression": "service.name = 'claimpilot'"
-              },
-              "functions": [],
-              "groupBy": [
-                {
-                  "dataType": "string",
-                  "key": "prompt.version",
-                  "type": "tag"
-                }
-              ],
-              "having": [],
-              "legend": "",
-              "limit": 10000,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "A",
-              "selectColumns": [],
-              "stepInterval": 60
-            },
-            {
-              "aggregations": [
-                {
-                  "metricName": "gen_ai.evaluation.score.count",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "rate"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": true,
-              "expression": "B",
-              "filter": {
-                "expression": "service.name = 'claimpilot'"
-              },
-              "functions": [],
-              "groupBy": [
-                {
-                  "dataType": "string",
-                  "key": "prompt.version",
-                  "type": "tag"
-                }
-              ],
-              "having": [],
-              "legend": "",
-              "limit": 10000,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "B",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ],
-          "queryFormulas": [
-            {
-              "aggregations": [],
-              "dataSource": "metrics",
-              "disabled": false,
-              "expression": "A/B",
-              "functions": [],
-              "groupBy": [],
-              "having": [],
-              "legend": "{{prompt.version}}",
-              "limit": 100,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "F1",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ]
-        },
-        "id": "d44d5840-a92c-4665-9b61-47f99f4f1bd3",
-        "queryType": "builder"
-      },
-      "selectedLogFields": [],
-      "selectedTracesFields": [],
-      "softMax": 1,
-      "softMin": 0,
-      "timePreferance": "GLOBAL_TIME",
-      "title": "Faithfulness by prompt version",
-      "yAxisUnit": "none"
-    },
-    {
-      "contextLinks": {
-        "linksData": []
-      },
-      "description": "Confident answers the eval funnel could not support, by prompt version. Baseline is zero.",
-      "fillSpans": false,
-      "id": "aq-unsupported",
-      "legendPosition": "bottom",
-      "nullZeroValues": "zero",
-      "opacity": "1",
-      "panelTypes": "graph",
-      "query": {
-        "builder": {
-          "queryData": [
-            {
-              "aggregations": [
-                {
-                  "metricName": "gen_ai.evaluation.verdicts",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "increase"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": false,
-              "expression": "A",
-              "filter": {
-                "expression": "service.name = 'claimpilot' AND label = 'unsupported'"
-              },
-              "functions": [],
-              "groupBy": [
-                {
-                  "dataType": "string",
-                  "key": "prompt.version",
-                  "type": "tag"
-                }
-              ],
-              "having": [],
-              "legend": "{{prompt.version}}",
-              "limit": 100,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "A",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ],
-          "queryFormulas": []
-        },
-        "id": "04cfaa9d-62de-4f60-b7a5-a93ed9ff8e5c",
-        "queryType": "builder"
-      },
-      "selectedLogFields": [],
-      "selectedTracesFields": [],
-      "softMax": 0,
-      "softMin": 0,
-      "timePreferance": "GLOBAL_TIME",
-      "title": "Unsupported verdicts (per min)",
-      "yAxisUnit": "none"
-    },
-    {
-      "contextLinks": {
-        "linksData": []
-      },
-      "description": "Tokens burned by the Tier-2 judge — the eval layer's own cost. Tier-0 catches cost nothing.",
-      "fillSpans": false,
-      "id": "aq-judge-tokens",
-      "legendPosition": "bottom",
-      "nullZeroValues": "zero",
-      "opacity": "1",
-      "panelTypes": "graph",
-      "query": {
-        "builder": {
-          "queryData": [
-            {
-              "aggregations": [
-                {
-                  "metricName": "gen_ai.evaluation.judge_tokens",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "increase"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": false,
-              "expression": "A",
-              "filter": {
-                "expression": "service.name = 'claimpilot'"
-              },
-              "functions": [],
-              "groupBy": [],
-              "having": [],
-              "legend": "judge tokens/min",
-              "limit": 100,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "A",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ],
-          "queryFormulas": []
-        },
-        "id": "95efd26b-45df-4f99-b7bb-720bfa39a12a",
-        "queryType": "builder"
-      },
-      "selectedLogFields": [],
-      "selectedTracesFields": [],
-      "softMax": 0,
-      "softMin": 0,
-      "timePreferance": "GLOBAL_TIME",
-      "title": "Judge token spend (per min)",
-      "yAxisUnit": "none"
-    },
-    {
-      "contextLinks": {
-        "linksData": []
-      },
-      "description": "gen_ai.usage.cost across agent + judge calls (OpenLIT cost extension).",
-      "fillSpans": false,
-      "id": "aq-cost",
-      "legendPosition": "bottom",
-      "nullZeroValues": "zero",
-      "opacity": "1",
-      "panelTypes": "graph",
-      "query": {
-        "builder": {
-          "queryData": [
-            {
-              "aggregations": [
-                {
-                  "metricName": "gen_ai.usage.cost.sum",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "increase"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": false,
-              "expression": "A",
-              "filter": {
-                "expression": "service.name = 'claimpilot'"
-              },
-              "functions": [],
-              "groupBy": [],
-              "having": [],
-              "legend": "USD/min",
-              "limit": 100,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "A",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ],
-          "queryFormulas": []
-        },
-        "id": "b583ff0e-9faa-444d-98a3-50ac421ab286",
-        "queryType": "builder"
-      },
-      "selectedLogFields": [],
-      "selectedTracesFields": [],
-      "softMax": 0,
-      "softMin": 0,
-      "timePreferance": "GLOBAL_TIME",
-      "title": "LLM spend (USD per min)",
-      "yAxisUnit": "none"
-    },
-    {
-      "contextLinks": {
-        "linksData": []
-      },
-      "description": "Which tier produced each verdict: tier0_grounding (free) vs judge_faithfulness (paid). The funnel cost story at a glance.",
-      "fillSpans": false,
-      "id": "aq-tier-pie",
-      "legendPosition": "bottom",
-      "nullZeroValues": "zero",
-      "opacity": "1",
-      "panelTypes": "pie",
-      "query": {
-        "builder": {
-          "queryData": [
-            {
-              "aggregations": [
-                {
-                  "metricName": "gen_ai.evaluation.verdicts",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "increase"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": false,
-              "expression": "A",
-              "filter": {
-                "expression": "service.name = 'claimpilot'"
-              },
-              "functions": [],
-              "groupBy": [
-                {
-                  "dataType": "string",
-                  "key": "eval.name",
-                  "type": "tag"
-                }
-              ],
-              "having": [],
-              "legend": "{{eval.name}}",
-              "limit": 100,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "A",
-              "reduceTo": "sum",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ],
-          "queryFormulas": []
-        },
-        "id": "b3a1e282-f6bc-4d38-9b48-819748b15cd0",
-        "queryType": "builder"
-      },
-      "selectedLogFields": [],
-      "selectedTracesFields": [],
-      "softMax": 0,
-      "softMin": 0,
-      "timePreferance": "GLOBAL_TIME",
-      "title": "Verdicts by eval tier",
-      "yAxisUnit": "none"
-    },
-    {
-      "contextLinks": {
-        "linksData": []
-      },
-      "description": "ok vs error — a failed claim is visible here instead of being a silent hole in the SLI.",
-      "fillSpans": false,
-      "id": "aq-claims-outcome",
-      "legendPosition": "bottom",
-      "nullZeroValues": "zero",
-      "opacity": "1",
-      "panelTypes": "graph",
-      "query": {
-        "builder": {
-          "queryData": [
-            {
-              "aggregations": [
-                {
-                  "metricName": "claimpilot.claims.processed",
-                  "spaceAggregation": "sum",
-                  "timeAggregation": "increase"
-                }
-              ],
-              "dataSource": "metrics",
-              "disabled": false,
-              "expression": "A",
-              "filter": {
-                "expression": "service.name = 'claimpilot'"
-              },
-              "functions": [],
-              "groupBy": [
-                {
-                  "dataType": "string",
-                  "key": "outcome",
-                  "type": "tag"
-                }
-              ],
-              "having": [],
-              "legend": "{{outcome}}",
-              "limit": 100,
-              "orderBy": [
-                {
-                  "columnName": "__result",
-                  "order": "desc"
-                }
-              ],
-              "queryName": "A",
-              "selectColumns": [],
-              "stepInterval": 60
-            }
-          ],
-          "queryFormulas": []
-        },
-        "id": "f95ac75c-efcd-4f95-9ac1-f5edf1a03fd7",
-        "queryType": "builder"
-      },
-      "selectedLogFields": [],
-      "selectedTracesFields": [],
-      "softMax": 0,
-      "softMin": 0,
-      "timePreferance": "GLOBAL_TIME",
-      "title": "Claims by outcome (per min)",
-      "yAxisUnit": "none"
+      "key": "type",
+      "value": "agent-quality"
     }
-  ]
+  ],
+  "spec": {
+    "display": {
+      "name": "ClaimPilot — Agent Quality",
+      "description": "Faithfulness as a golden signal: average eval score and grounded-verdict SLO ratio for claimpilot, split by prompt version, plus the eval layer's own cost. Turns red when the agent lies while everything traditional stays green."
+    },
+    "datasources": null,
+    "variables": [],
+    "panels": {
+      "by_version": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Faithfulness by prompt version",
+            "description": "Average score split by prompt.version — the regression concentrates on one version; the investigation's key evidence."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "none",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": ""
+                }
+              },
+              "axes": {
+                "softMin": null,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "plugin": {
+                  "kind": "signoz/CompositeQuery",
+                  "spec": {
+                    "queries": [
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "A",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "gen_ai.evaluation.score.sum",
+                              "temporality": "",
+                              "timeAggregation": "rate",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "service.name = 'claimpilot'"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "prompt.version",
+                              "signal": "",
+                              "fieldContext": "attribute",
+                              "fieldDataType": "string"
+                            }
+                          ],
+                          "order": null,
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "B",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "gen_ai.evaluation.score.count",
+                              "temporality": "",
+                              "timeAggregation": "rate",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "service.name = 'claimpilot'"
+                          },
+                          "groupBy": [
+                            {
+                              "name": "prompt.version",
+                              "signal": "",
+                              "fieldContext": "attribute",
+                              "fieldDataType": "string"
+                            }
+                          ],
+                          "order": null,
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_formula",
+                        "spec": {
+                          "name": "F1",
+                          "expression": "A/B",
+                          "disabled": false,
+                          "order": null,
+                          "functions": null,
+                          "legend": "{{prompt.version}}"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "links": null
+        }
+      },
+      "claims_outcome": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Claims by outcome (per min)",
+            "description": "ok vs error — a failed claim is visible here instead of being a silent hole in the SLI."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "none",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": ""
+                }
+              },
+              "axes": {
+                "softMin": null,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "claimpilot.claims.processed",
+                        "temporality": "",
+                        "timeAggregation": "increase",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.name = 'claimpilot'"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "outcome",
+                        "signal": "",
+                        "fieldContext": "attribute",
+                        "fieldDataType": "string"
+                      }
+                    ],
+                    "legend": "{{outcome}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": null
+        }
+      },
+      "grounded_ratio": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Grounded-verdict ratio (SLO SLI)",
+            "description": "rate(verdicts{label=grounded}) / rate(all verdicts). SLO 98% grounded; the fast-burn alert fires below 0.85 over 10m."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "none",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": ""
+                }
+              },
+              "axes": {
+                "softMin": null,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "plugin": {
+                  "kind": "signoz/CompositeQuery",
+                  "spec": {
+                    "queries": [
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "A",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "gen_ai.evaluation.verdicts",
+                              "temporality": "",
+                              "timeAggregation": "rate",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "service.name = 'claimpilot' AND label = 'grounded'"
+                          },
+                          "groupBy": null,
+                          "order": null,
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "B",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "gen_ai.evaluation.verdicts",
+                              "temporality": "",
+                              "timeAggregation": "rate",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "service.name = 'claimpilot'"
+                          },
+                          "groupBy": null,
+                          "order": null,
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_formula",
+                        "spec": {
+                          "name": "F1",
+                          "expression": "A/B",
+                          "disabled": false,
+                          "order": null,
+                          "functions": null,
+                          "legend": "grounded ratio"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "links": null
+        }
+      },
+      "judge_tokens": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Judge token spend (per min)",
+            "description": "Tokens burned by the Tier-2 judge — the eval layer's own cost. Tier-0 catches cost nothing."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "none",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": ""
+                }
+              },
+              "axes": {
+                "softMin": null,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "gen_ai.evaluation.judge_tokens",
+                        "temporality": "",
+                        "timeAggregation": "increase",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.name = 'claimpilot'"
+                    },
+                    "legend": "judge tokens/min"
+                  }
+                }
+              }
+            }
+          ],
+          "links": null
+        }
+      },
+      "llm_spend": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "LLM spend (USD per min)",
+            "description": "gen_ai.usage.cost across agent + judge calls (OpenLIT cost extension)."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "none",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": ""
+                }
+              },
+              "axes": {
+                "softMin": null,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "gen_ai.usage.cost.sum",
+                        "temporality": "",
+                        "timeAggregation": "increase",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.name = 'claimpilot'"
+                    },
+                    "legend": "USD/min"
+                  }
+                }
+              }
+            }
+          ],
+          "links": null
+        }
+      },
+      "sli_avg": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Faithfulness SLI — average score (0..1)",
+            "description": "True windowed average of gen_ai.evaluation.score (rate .sum / rate .count). The golden signal: drops on quality regressions while every traditional signal stays green."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "none",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": ""
+                }
+              },
+              "axes": {
+                "softMin": null,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "plugin": {
+                  "kind": "signoz/CompositeQuery",
+                  "spec": {
+                    "queries": [
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "A",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "gen_ai.evaluation.score.sum",
+                              "temporality": "",
+                              "timeAggregation": "rate",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "service.name = 'claimpilot'"
+                          },
+                          "groupBy": null,
+                          "order": null,
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_query",
+                        "spec": {
+                          "name": "B",
+                          "stepInterval": 0,
+                          "signal": "metrics",
+                          "source": "",
+                          "aggregations": [
+                            {
+                              "metricName": "gen_ai.evaluation.score.count",
+                              "temporality": "",
+                              "timeAggregation": "rate",
+                              "spaceAggregation": "sum",
+                              "reduceTo": ""
+                            }
+                          ],
+                          "disabled": true,
+                          "filter": {
+                            "expression": "service.name = 'claimpilot'"
+                          },
+                          "groupBy": null,
+                          "order": null,
+                          "selectFields": null,
+                          "secondaryAggregations": null,
+                          "functions": null,
+                          "legend": ""
+                        }
+                      },
+                      {
+                        "type": "builder_formula",
+                        "spec": {
+                          "name": "F1",
+                          "expression": "A/B",
+                          "disabled": false,
+                          "order": null,
+                          "functions": null,
+                          "legend": "avg faithfulness"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "links": null
+        }
+      },
+      "unsupported": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Unsupported verdicts (per min)",
+            "description": "Confident answers the eval funnel could not support, by prompt version. Baseline is zero."
+          },
+          "plugin": {
+            "kind": "signoz/TimeSeriesPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time",
+                "fillSpans": false
+              },
+              "formatting": {
+                "unit": "none",
+                "decimalPrecision": "2"
+              },
+              "chartAppearance": {
+                "lineInterpolation": "spline",
+                "showPoints": false,
+                "lineStyle": "solid",
+                "fillMode": "none",
+                "spanGaps": {
+                  "fillOnlyBelow": false,
+                  "fillLessThan": ""
+                }
+              },
+              "axes": {
+                "softMin": null,
+                "softMax": null,
+                "isLogScale": false
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              },
+              "thresholds": null
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "gen_ai.evaluation.verdicts",
+                        "temporality": "",
+                        "timeAggregation": "increase",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.name = 'claimpilot' AND label = 'unsupported'"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "prompt.version",
+                        "signal": "",
+                        "fieldContext": "attribute",
+                        "fieldDataType": "string"
+                      }
+                    ],
+                    "legend": "{{prompt.version}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": null
+        }
+      },
+      "verdicts_by_tier": {
+        "kind": "Panel",
+        "spec": {
+          "display": {
+            "name": "Verdicts by eval tier",
+            "description": "tier0_grounding (free) vs judge_faithfulness (paid) — the funnel cost story at a glance."
+          },
+          "plugin": {
+            "kind": "signoz/PieChartPanel",
+            "spec": {
+              "visualization": {
+                "timePreference": "global_time"
+              },
+              "formatting": {
+                "unit": "",
+                "decimalPrecision": "1"
+              },
+              "legend": {
+                "position": "bottom",
+                "mode": "list",
+                "customColors": null
+              }
+            }
+          },
+          "queries": [
+            {
+              "kind": "time_series",
+              "spec": {
+                "plugin": {
+                  "kind": "signoz/BuilderQuery",
+                  "spec": {
+                    "name": "A",
+                    "signal": "metrics",
+                    "source": "",
+                    "aggregations": [
+                      {
+                        "metricName": "gen_ai.evaluation.verdicts",
+                        "temporality": "",
+                        "timeAggregation": "increase",
+                        "spaceAggregation": "sum"
+                      }
+                    ],
+                    "disabled": false,
+                    "filter": {
+                      "expression": "service.name = 'claimpilot'"
+                    },
+                    "groupBy": [
+                      {
+                        "name": "eval.name",
+                        "signal": "",
+                        "fieldContext": "attribute",
+                        "fieldDataType": "string"
+                      }
+                    ],
+                    "legend": "{{eval.name}}"
+                  }
+                }
+              }
+            }
+          ],
+          "links": null
+        }
+      }
+    },
+    "layouts": [
+      {
+        "kind": "Grid",
+        "spec": {
+          "items": [
+            {
+              "x": 0,
+              "y": 0,
+              "width": 6,
+              "height": 6,
+              "content": {
+                "$ref": "#/spec/panels/sli_avg"
+              }
+            },
+            {
+              "x": 6,
+              "y": 0,
+              "width": 6,
+              "height": 6,
+              "content": {
+                "$ref": "#/spec/panels/grounded_ratio"
+              }
+            },
+            {
+              "x": 0,
+              "y": 6,
+              "width": 6,
+              "height": 6,
+              "content": {
+                "$ref": "#/spec/panels/by_version"
+              }
+            },
+            {
+              "x": 6,
+              "y": 6,
+              "width": 6,
+              "height": 6,
+              "content": {
+                "$ref": "#/spec/panels/unsupported"
+              }
+            },
+            {
+              "x": 0,
+              "y": 12,
+              "width": 6,
+              "height": 6,
+              "content": {
+                "$ref": "#/spec/panels/judge_tokens"
+              }
+            },
+            {
+              "x": 6,
+              "y": 12,
+              "width": 6,
+              "height": 6,
+              "content": {
+                "$ref": "#/spec/panels/llm_spend"
+              }
+            },
+            {
+              "x": 0,
+              "y": 18,
+              "width": 6,
+              "height": 6,
+              "content": {
+                "$ref": "#/spec/panels/verdicts_by_tier"
+              }
+            },
+            {
+              "x": 6,
+              "y": 18,
+              "width": 6,
+              "height": 6,
+              "content": {
+                "$ref": "#/spec/panels/claims_outcome"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "duration": "",
+    "refreshInterval": "",
+    "links": null
+  }
 }

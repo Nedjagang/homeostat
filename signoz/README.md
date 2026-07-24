@@ -10,7 +10,9 @@ custom UI. A fresh SigNoz should be able to import these and light up every pane
 - `traditional.json` — LLM latency p95/p99, call volume, tokens, claim throughput, claim
   error rate. **Stays green during the prompt-quality regression** (that contrast is the
   whole story; the error-rate panel moves only on infra failures like the broken-tool chaos).
-- Import via SigNoz UI (Dashboards → Import JSON) or `signoz_import_dashboard` over MCP.
+- Both are stored in the **Dashboards V2 (Perses v6) schema** — the redesigned dashboards
+  experience SigNoz is rolling out. Import with `python signoz/push-packs.py` (create-or-update
+  by name via `POST/PUT /api/v2/dashboards`); the legacy UI Import-JSON dialog predates v6.
 
 ## Alerts (`alerts/`)
 - **The headline pack** (design + calibration in `alerts/faithfulness-slo.md`):

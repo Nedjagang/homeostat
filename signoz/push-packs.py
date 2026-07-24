@@ -1,7 +1,8 @@
-"""Push the committed alert pack to a SigNoz instance (create-or-update by alert name).
+"""Push the committed alert + dashboard packs to a SigNoz instance (create-or-update by name).
 
-SigNoz has no alert-import UI, so this script IS the import path (GATE 3: a fresh
-instance lights up in under a minute). Idempotent — safe to re-run after editing a rule.
+SigNoz has no alert-import UI and the new Dashboards V2 (Perses v6) schema is API-first,
+so this script IS the import path (GATE 3: a fresh instance lights up in under a minute).
+Idempotent — safe to re-run after editing any pack file.
 
 Usage:
     export SIGNOZ_API_KEY=<UI -> Settings -> API Keys>       # or put it in claimpilot/.env
@@ -29,6 +30,7 @@ import requests
 BASE = os.getenv("SIGNOZ_BASE_URL", "https://signoz.apteancloud.dev").rstrip("/")
 API_KEY = os.getenv("SIGNOZ_API_KEY", "")
 ALERTS_DIR = Path(__file__).resolve().parent / "alerts"
+DASHBOARDS_DIR = Path(__file__).resolve().parent / "dashboards"
 
 if not API_KEY or API_KEY == "REPLACE_ME":
     sys.exit("SIGNOZ_API_KEY is not set (SigNoz UI -> Settings -> API Keys).")
@@ -73,6 +75,28 @@ def push_rule(body: dict, rule_id: str | None) -> None:
     print(f"  {action}")
 
 
+def push_dashboards() -> None:
+    """Create-or-update the Dashboards V2 (schemaVersion v6) pack by Perses name."""
+    resp = session.get(f"{BASE}/api/v2/dashboards?limit=100", timeout=30)
+    resp.raise_for_status()
+    have = {d.get("name"): d.get("id")
+            for d in resp.json().get("data", {}).get("dashboards", []) if d.get("name")}
+    for path in sorted(DASHBOARDS_DIR.glob("*.json")):
+        body = json.loads(path.read_text(encoding="utf-8"))
+        name = body.get("name", path.stem)
+        print(f"{path.name}: '{name}'")
+        if name in have:
+            resp = session.put(f"{BASE}/api/v2/dashboards/{have[name]}", json=body, timeout=30)
+            action = f"updated (id={have[name]})"
+        else:
+            resp = session.post(f"{BASE}/api/v2/dashboards", json=body, timeout=30)
+            action = "created"
+        if resp.status_code >= 300:
+            print(f"  FAILED {resp.status_code}: {resp.text[:400]}")
+            sys.exit(1)
+        print(f"  {action}")
+
+
 def main() -> None:
     # The rules route to the homeostat-brain webhook channel; SigNoz refuses rules
     # whose channels don't exist, so fail with instructions instead of a cryptic 400.
@@ -91,7 +115,8 @@ def main() -> None:
         name = body["alert"]
         print(f"{path.name}: '{name}'")
         push_rule(body, have.get(name))
-    print("done — check Alerts in the SigNoz UI.")
+    push_dashboards()
+    print("done — check Alerts and Dashboards in the SigNoz UI.")
 
 
 if __name__ == "__main__":

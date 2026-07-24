@@ -1,13 +1,15 @@
 """The eval spine (the moat) + the production-cheap funnel.
 
-Funnel today: Tier 0 (deterministic, 100% of claims, $0) escalating to the Tier 2
-LLM judge on everything Tier 0 can't clear on its own. Tier 0 can only prove one
-thing cheaply — "answered with NO retrieved context and no abstention" — because
-the moment retrieval returns even weakly-relevant text, groundedness is a semantic
-question, which is exactly the judge's job. Running the judge on every Tier-0 pass
-is fine at demo volume; the production gating (judge only on flagged + a ~2%
-calibration sample — GATE 2A) and the Tier-1 cheap proxy land later. Shapes are
-stubbed below so the funnel's seams are locked now.
+The funnel (all three tiers live):
+  Tier 0  deterministic, 100% of claims, $0 — "answered with NO retrieved context and
+          no abstention" is provably unsupported, no LLM needed.
+  Tier 1  lexical overlap proxy, 100% of Tier-0 passes, $0 — routes only SUSPICIOUS
+          answers (low answer↔context overlap) to the judge.
+  Tier 2  the LLM judge — authoritative 0..1 verdict, runs on Tier-1-flagged answers
+          plus a ~2% calibration sample that keeps the cheap tiers honest.
+EVAL_JUDGE_MODE=all disables the gating (judge on every Tier-0 pass) for demos and
+calibration batches. The routing decision lands on the span as eval.route, so the
+judge-share economics are visible per-claim in SigNoz.
 
 The verdict is emitted three ways:
   1. ATTRIBUTES on the existing root span, spec-exact per the OTel GenAI semantic
@@ -24,13 +26,16 @@ A WARN log carrying the trace_id additionally fires on every unsupported answer
 import hashlib
 import json
 import logging
+import math
 import os
 import re
+from collections import Counter
 
 from openai import OpenAI
 from opentelemetry import trace, metrics
 
 import chaos
+from retriever import _tokenize
 
 tracer = trace.get_tracer("claimpilot")
 meter = metrics.get_meter("claimpilot")
@@ -80,11 +85,25 @@ def tier0(answer: str, context: str) -> bool:
     return ABSTENTION_PHRASE in answer.strip().lower()
 
 
-# ---- Tier 1: cheap ML proxy, runs on 100% (embedding cosine / local NLI) ----
+# ---- Tier 1: cheap lexical proxy, runs on 100%, no LLM, no model download ----
+# The judge only runs on answers Tier 1 finds SUSPICIOUS (low lexical overlap with the
+# retrieved context — the signature of fabricated amounts/decisions) plus a small
+# calibration sample. Swap for embedding cosine / local NLI later; the routing seam
+# stays identical.
+JUDGE_MODE = os.getenv("EVAL_JUDGE_MODE", "funnel")  # funnel (gated) | all (judge everything)
+TIER1_SUSPICION = float(os.getenv("EVAL_TIER1_THRESHOLD", "0.55"))
+
+
 def tier1_proxy(answer: str, context: str) -> float:
-    """Return a cheap faithfulness proxy in 0..1. Replace with embedding cosine or a local NLI model."""
-    # TODO: embedding cosine(answer, context) or a small local NLI entailment score.
-    return 1.0
+    """TF cosine between answer and context tokens, 0..1. Grounded answers quote the
+    clause they relied on, so healthy overlap is high; fabricated determinations share
+    little vocabulary with the (irrelevant or empty) context."""
+    a, c = Counter(_tokenize(answer)), Counter(_tokenize(context))
+    common = set(a) & set(c)
+    num = sum(a[t] * c[t] for t in common)
+    den = (math.sqrt(sum(v * v for v in a.values()))
+           * math.sqrt(sum(v * v for v in c.values())))
+    return num / den if den else 0.0
 
 
 # ---- Tier 2: the authoritative LLM judge ----
@@ -144,20 +163,40 @@ def evaluate_and_emit(answer: str, context: str, claim: dict, root, trace_id: st
     """Run the funnel on one claim, then emit the verdict (span attrs + event + metric —
     see the module docstring). Tier 0 fail is authoritative (provably unsupported, $0);
     Tier 0 pass escalates to the judge."""
+    route = "judge:all"
     if not tier0(answer, context):
         name, score = "tier0_grounding", 0.0
         reason = "answered with no supporting context and no abstention"
+        route = "tier0:fail"
     else:
-        try:
-            verdict = judge(answer, context)
-            name, score, reason = "judge_faithfulness", verdict["score"], verdict["reason"]
-            judge_tokens.add(verdict["tokens"], {"service.name": "claimpilot", "model": JUDGE_MODEL})
-        except Exception as e:
-            # An unreachable judge must not sink the claim — but the verdict has to say
-            # honestly that only Tier 0 vouched for it.
-            log.warning("judge call failed, falling back to tier0", extra={"error": str(e)})
-            name, score, reason = "tier0_grounding", 1.0, "tier0 pass; judge unavailable"
+        t1 = tier1_proxy(answer, context)
+        suspicious = t1 < TIER1_SUSPICION
+        calibration = _sampled(claim, CALIBRATION_RATE)
+        needs_judge = JUDGE_MODE == "all" or suspicious or calibration
+        if needs_judge:
+            route = ("judge:suspicious" if suspicious else
+                     "judge:calibration" if calibration else "judge:all")
+            try:
+                verdict = judge(answer, context)
+                name, score, reason = "judge_faithfulness", verdict["score"], verdict["reason"]
+                judge_tokens.add(verdict["tokens"], {"service.name": "claimpilot", "model": JUDGE_MODEL})
+            except Exception as e:
+                # An unreachable judge must not sink the claim — but the verdict has to
+                # say honestly that only the cheap tiers vouched for it.
+                log.warning("judge call failed, falling back to tier1", extra={"error": str(e)})
+                name, score, reason = "tier1_proxy", (0.0 if suspicious else 1.0), \
+                    f"judge unavailable; tier1 cosine {t1:.2f}"
+        else:
+            # Tier 1 cleared it: binary pass (score 1.0) with the raw cosine kept on the
+            # span. NOT a calibrated faithfulness value — the funnel's claim is only
+            # "high context overlap == not worth a judge call", and the calibration
+            # sample keeps that claim honest.
+            name, score = "tier1_proxy", 1.0
+            reason = f"cleared by tier1 lexical overlap (cosine {t1:.2f} >= {TIER1_SUSPICION})"
+            route = "tier1:clear"
+        root.set_attribute("eval.tier1.cosine", round(t1, 4))
     label = "grounded" if score >= 0.5 else "unsupported"
+    root.set_attribute("eval.route", route)
 
     # 1. Span attributes — spec-exact names from semantic-conventions-genai.
     root.set_attribute("gen_ai.evaluation.name", name)

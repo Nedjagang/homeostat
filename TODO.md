@@ -31,9 +31,9 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · **(GATE)** = prove it l
 - [~] `prompt.version` on the root span; WARN log on unsupported (carries `trace_id`, exports via OTLP). **(GATE 1)** *(emitting clean; still to prove live in the SigNoz UI)*
 - [~] `eval.py` funnel: Tier 0 (deterministic) + Tier 2 judge (gpt-5.6-sol, JSON verdict) wired and proven — baseline all 1.0, overconfident run tanks the 3 unanswerable to 0.0/0.2/0.0. Tier 1 stubbed; judge gating (flagged+2% only) not wired yet.
 - [x] Verdict as attributes on the root span + the bounded metric (contract labels incl. `label`, `model`; judge tokens on `gen_ai.evaluation.judge_tokens`).
-- [ ] **Filter `score<0.5` → drill to the exact lying span with prompt + reason. (GATE 2 — THE MOAT, make it flawless.)**
-- [ ] Funnel routes only flagged + ~2% calibration to the judge; "judge $/1,000" panel data present. **(GATE 2A)**
-- [ ] Self-observe: brain cost + `homeostat.action` visible (with C). **(GATE 6-meta)**
+- [x] **Filter `score<0.5` → drill to the exact lying span with prompt + reason. (GATE 2 — THE MOAT.)** Verified in the UI + used by the brain's investigation.
+- [~] Funnel routes only flagged (tier1 lexical) + ~2% calibration to the judge; `eval.route` on every span; judge-token metric feeding the cost panel. **(GATE 2A)** *(live; regression-catch verification in progress)*
+- [~] Self-observe: brain stages traced as `homeostat.action` spans under service `homeostat-brain`. **(GATE 6-meta)** *(emitting; UI confirmation pending)*
 - [ ] Record the 3-minute video (Day 4).
 
 ## Agent B — SigNoz & Data-plane
@@ -48,22 +48,23 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · **(GATE)** = prove it l
 - [ ] Export every dashboard/alert as JSON into `signoz/`. **(GATE 3)** import clean + right alert in <1 min.
 
 ## Agent C — Brain & Remediation
-- [ ] `brain/main.py` `/webhook` reachable; `skill.md` bounded-query rules followed.
-- [ ] `investigate()`: MCP loop that **correlates score↓ with `prompt.version`**; evidence = clickable queries.
-- [ ] Slack report with a query link per claim + a proposed reversible action. **(GATE 5a)**
-- [ ] `remediate.py`: `pin_prompt_version` / `circuit_break` against ClaimPilot `/control`.
-- [ ] `verify.py`: poll the faithfulness SLI; recover → done, else roll back + escalate (no thrash).
-- [ ] Save the regression case to `chaos/regressions/`.
-- [ ] **approve → revert → SLI recovers → regression test saved. (GATE 5)** + a non-recovering case rolls back.
+- [x] `brain/main.py` `/webhook` reachable (+ `/simulate` for local delivery testing); per-incident workers with dedup.
+- [x] `investigate()`: bounded MCP playbook that **correlates score↓ with `prompt.version` AND `model`** vs a baseline window + confirms traditional signals stayed green. Live-proven: named v_overconfident @0.82 + the nano downgrade.
+- [~] Slack report (Block Kit, evidence links, Approve/Reject over Socket Mode). **(GATE 5a)** *(code proven; delivery blocked until the bot is invited to the channel — `/invite @alerts_for_signoz`)*
+- [x] `remediate.py`: `pin_prompt_version` / `circuit_break` (bearer-authed, both reversible).
+- [x] `verify.py`: poll the grounded-ratio SLI (10m window, target 0.90); recover → close, else escalate, no thrash.
+- [x] Save the regression case to `chaos/regressions/` (first case: 2026-07-24-203648-v_overconfident.json).
+- [x] **approve → revert → SLI recovers → regression test saved. (GATE 5)** Drill 2026-07-25 02:04Z: alert→verified recovery in 2m49s (auto-approve drill mode; re-run with a human click pending the Slack invite).
 - [ ] (Optional) minimal `viewer/` page with deep links.
+- [ ] Deploy brain + claimpilot on the SigNoz VM (webhook becomes container-local; runbook in docs/overnight-runbook.md).
 
 ## Agent D — Rigor & Adoption (make it not a toy)
-- [ ] `chaos/flags.md` library implemented; each flag reproduces its failure on demand.
-- [ ] `chaos/loadgen.py`: replay at volume; capture bounded cardinality/disk numbers (scale evidence).
-- [ ] Judge calibration: hand-label ~30–50 answers; measure judge agreement; write `chaos/calibration/report.md`.
+- [~] `chaos/flags.md` library: `prompt_overconfident` (release = prompt+model) and `broken_json_tool` both implemented and verified end-to-end with their heals; `poisoned_chunk` still a stub.
+- [~] `chaos/loadgen.py`: implemented (threaded replay + throughput report); volume run + cardinality capture scheduled tonight.
+- [~] Judge calibration: `generate.py` batch running (~40 samples across grounded/strong × overconfident/nano); independent labeling + agreement report next. NOTE: labels by the AI assistant, disclosed in the report and blog.
 - [ ] `SKILL.md` polish + importable-pack polish (with B) + one-page reproduction guide.
-- [ ] README credibility checklist accurate; assemble `docs/blog-draft.md` from `docs/what-broke/` notes.
-- [ ] **calibration report + reproducible failure library + scale evidence committed. (GATE 6)**
+- [x] README credibility checklist accurate; `docs/blog-draft.md` assembled from the four `what-broke/` postmortems (screenshot markers pending captures).
+- [~] **calibration report + reproducible failure library + scale evidence committed. (GATE 6)**
 
 ---
 

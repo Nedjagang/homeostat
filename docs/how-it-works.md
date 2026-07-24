@@ -78,6 +78,9 @@ All three points have been run and verified end-to-end against a live SigNoz.
  │   │ 4. score the answer (eval.py)    │                                     │
  │   │     ├─ Tier 0: deterministic,     │                                     │
  │   │     │  free check                 │                                     │
+ │   │     ├─ Tier 1: lexical overlap    │                                     │
+ │   │     │  proxy, free — only         │                                     │
+ │   │     │  suspicious answers go on   │                                     │
  │   │     └─ Tier 2: LLM judge          │                                     │
  │   │        (score 0..1 + reason)      │                                     │
  │   └───────────────────────────────────┘                                     │
@@ -145,14 +148,24 @@ This is what happens for every single claim, both in the loop and in a batch run
    call and tool call as child spans automatically, including the full prompt and
    completion text and token counts.
 
-4. **Score the answer** (`evaluate_and_emit` in `eval.py`):
+4. **Score the answer** (`evaluate_and_emit` in `eval.py`) — a three-tier funnel that
+   keeps the expensive judge off the answers that don't need it:
    - **Tier 0 (free, deterministic).** If the context is empty AND the answer does not
      contain the exact abstention sentence, the answer is provably unsupported: the agent
      asserted something with nothing retrieved to back it. Score 0.0, done, no LLM cost.
-   - **Tier 2 (the judge).** Otherwise a second LLM call grades the answer against the
-     context and returns JSON: a score from 0 to 1 and a one-line reason. Score below 0.5
-     is labeled `unsupported`. If the judge call fails, the claim is not blocked — the
-     verdict falls back to Tier 0's pass, and the recorded verdict says so honestly.
+   - **Tier 1 (free, lexical).** Word-overlap similarity between the answer and the
+     retrieved context. Grounded answers quote the clause they relied on, so healthy
+     overlap is high; fabricated amounts and decisions share little vocabulary with the
+     context. High-overlap answers are cleared without a judge call (binary pass, with
+     the raw overlap value kept on the span); low-overlap answers go to the judge.
+   - **Tier 2 (the judge).** A second LLM call grades the answer against the context and
+     returns a score from 0 to 1 with a one-line reason. It runs on Tier-1-flagged
+     answers plus a ~2% random calibration sample that keeps the cheap tiers honest.
+     Score below 0.5 is labeled `unsupported`. If the judge call fails, the claim is not
+     blocked — the verdict falls back to the cheap tiers and says so honestly.
+   - The routing decision (`tier0:fail`, `tier1:clear`, `judge:suspicious`,
+     `judge:calibration`) lands on the span as `eval.route`, so the funnel's economics
+     are visible per-claim. `EVAL_JUDGE_MODE=all` disables the gating.
 
 5. **Emit the verdict everywhere it is needed:**
    - **On the root span** (for drill-down in one exact trace), using the exact attribute
@@ -276,29 +289,44 @@ Environment variables that matter (see `.env.example` for all):
 
 ---
 
-## 9. Not built yet (the boundary)
+## 9. The brain (`brain/`) — the part that heals
 
-Planned in `TODO.md` / the build doc, in rough order:
+A second, separate service. Its whole loop:
 
-- **SigNoz dashboard and alert packs** — the faithfulness SLO alert pack (98%-grounded
-  SLO, 7.5× fast-burn rule, absolute floor) is authored and calibrated in
-  `signoz/alerts/` with a push script (`signoz/push-packs.py`), pending a SigNoz API key
-  for the live push and fire-during-regression verification. Still to build: the
-  "traditional signals stay green" dashboard, judge-cost panels, cost alerts.
-- **The brain** (`brain/`) — a separate service that receives the SigNoz alert webhook,
-  investigates via the SigNoz MCP server (correlating low scores with `prompt.version`),
-  posts an evidence-linked report to Slack, and after human approval calls the same
-  `/control` endpoints shown above, then verifies the score recovered. Deployment note:
-  it will run next to SigNoz on the VM, because SigNoz must be able to reach it with the
-  webhook and a laptop cannot accept that inbound connection.
-- **Tier 1 of the eval funnel** — a cheap local relevance score between answer and
-  context, so the paid judge only runs on suspicious answers plus a small calibration
-  sample. The seams exist in `eval.py`; the routing is deliberately not enabled until it
-  is calibrated.
-- **Judge calibration** (`chaos/calibration/`) — hand-label a sample of answers and
-  measure how often the judge agrees with humans, so the judge is treated as a measured
-  signal, not assumed truth.
-- **Load generation** (`chaos/loadgen.py`) — replay claims at volume to show metric
-  cardinality and disk stay bounded.
+1. **Receive** the SigNoz alert webhook (`POST /webhook` on port 8090). The alert
+   channel `homeostat-brain` is already configured in SigNoz and carries both fire and
+   resolve notifications.
+2. **Investigate** through the SigNoz MCP server with a *fixed, bounded playbook*
+   (`brain/skill.md`): faithfulness score by `prompt.version` in the incident window vs
+   a baseline window, the same by `model`, and a check that the traditional signals
+   (claim error rate, p99 latency) did NOT move. The brain cannot ask an unbounded
+   question, so it cannot hallucinate a root cause — every claim in its report carries
+   the numbers it was computed from.
+3. **Report** to Slack as an evidence-linked message with **Approve heal / Reject**
+   buttons. Button clicks arrive over Slack Socket Mode — a websocket the brain opens
+   outward — so the brain needs no public endpoint.
+4. **Heal** only after a human clicks approve (its entire write surface is the two
+   reversible `/control` actions). `BRAIN_AUTO_APPROVE=1` exists solely for unattended
+   drills and labels itself as such everywhere.
+5. **Verify** by polling the grounded-ratio SLI until it clears 0.90 (or escalate after
+   15 minutes), then save the incident as a reproducible regression case in
+   `chaos/regressions/`.
+6. The brain traces itself into the same SigNoz as `homeostat-brain` — every stage is a
+   span tagged `homeostat.action`, so the healer is visible next to the damage it fixed.
+
+Run it: `cd brain && pip install -r requirements.txt && uvicorn main:app --port 8090`.
+`POST /simulate` injects a canned firing alert for local testing.
+
+---
+
+## 10. Not built yet (the boundary)
+
+- **Deploy on the SigNoz VM** — the brain and ClaimPilot belong next to SigNoz (the
+  alert webhook can then reach the brain by container name; a laptop cannot accept that
+  inbound connection). The compose file and runbook exist; the deployment hasn't happened.
+- **Tier-1 upgrade** — the lexical-overlap proxy works but is deliberately simple;
+  embedding cosine or a local NLI model is the planned upgrade behind the same seam.
 - **Local SigNoz via Foundry** (`casting.yaml`) — a reproducible local install of the
-  whole SigNoz stack, so anyone can run this repo without our VM.
+  whole SigNoz stack, so anyone can run this repo without our VM. Pinned to the same
+  version as the VM (v0.134.0) but not yet validated on a clean host.
+- **Cost alerts** (`cost-velocity`, `judge-budget`) — panels exist; the alert rules don't.

@@ -4,10 +4,13 @@ Everything here is **built inside stock SigNoz with Query Builder and exported a
 custom UI. A fresh SigNoz should be able to import these and light up every panel.
 
 ## Dashboards (`dashboards/`)
-- `traditional.json` — p50/p95/p99 latency, tokens/claim, $/claim, tool error rate. **Stays green**
-  during the prompt-quality regression (that contrast is the whole story).
-- `agent-quality.json` — faithfulness SLI over time, % unsupported, judge $/1,000 claims,
-  tool success/retry, cost by customer tier.
+- `agent-quality.json` — faithfulness SLI (avg score), grounded-verdict SLO ratio, score by
+  `prompt.version`, unsupported verdicts, judge token spend, LLM $ spend, verdicts by eval
+  tier, claims by outcome. **This is the dashboard that turns red when the agent lies.**
+- `traditional.json` — LLM latency p95/p99, call volume, tokens, claim throughput, claim
+  error rate. **Stays green during the prompt-quality regression** (that contrast is the
+  whole story; the error-rate panel moves only on infra failures like the broken-tool chaos).
+- Import via SigNoz UI (Dashboards → Import JSON) or `signoz_import_dashboard` over MCP.
 
 ## Alerts (`alerts/`)
 - **The headline pack** (design + calibration in `alerts/faithfulness-slo.md`):

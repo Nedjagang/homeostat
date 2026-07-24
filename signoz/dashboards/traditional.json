@@ -1,0 +1,413 @@
+{
+  "description": "Latency, volume, tokens, throughput and claim errors for claimpilot. Deliberately boring: during a prompt-quality regression every panel here stays green — pair with the Agent Quality dashboard to see the gap faithfulness fills.",
+  "layout": [
+    {
+      "h": 7,
+      "i": "tr-latency",
+      "w": 6,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "h": 7,
+      "i": "tr-llm-calls",
+      "w": 6,
+      "x": 6,
+      "y": 0
+    },
+    {
+      "h": 7,
+      "i": "tr-tokens",
+      "w": 6,
+      "x": 0,
+      "y": 7
+    },
+    {
+      "h": 7,
+      "i": "tr-throughput",
+      "w": 6,
+      "x": 6,
+      "y": 7
+    },
+    {
+      "h": 7,
+      "i": "tr-error-rate",
+      "w": 12,
+      "x": 0,
+      "y": 14
+    }
+  ],
+  "tags": [
+    "homeostat",
+    "claimpilot",
+    "gen-ai",
+    "traditional"
+  ],
+  "title": "ClaimPilot — Traditional Signals (stays green)",
+  "variables": {},
+  "version": "v5",
+  "widgets": [
+    {
+      "contextLinks": {
+        "linksData": []
+      },
+      "description": "gen_ai.client.operation.duration percentiles. Stays flat during a prompt-quality regression — that contrast is the whole story.",
+      "fillSpans": false,
+      "id": "tr-latency",
+      "legendPosition": "bottom",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "panelTypes": "graph",
+      "query": {
+        "builder": {
+          "queryData": [
+            {
+              "aggregations": [
+                {
+                  "metricName": "gen_ai.client.operation.duration.bucket",
+                  "spaceAggregation": "p99"
+                }
+              ],
+              "dataSource": "metrics",
+              "disabled": false,
+              "expression": "A",
+              "filter": {
+                "expression": "service.name = 'claimpilot'"
+              },
+              "functions": [],
+              "groupBy": [],
+              "having": [],
+              "legend": "p99",
+              "limit": 100,
+              "orderBy": [
+                {
+                  "columnName": "__result",
+                  "order": "desc"
+                }
+              ],
+              "queryName": "A",
+              "selectColumns": [],
+              "stepInterval": 60
+            },
+            {
+              "aggregations": [
+                {
+                  "metricName": "gen_ai.client.operation.duration.bucket",
+                  "spaceAggregation": "p95"
+                }
+              ],
+              "dataSource": "metrics",
+              "disabled": false,
+              "expression": "B",
+              "filter": {
+                "expression": "service.name = 'claimpilot'"
+              },
+              "functions": [],
+              "groupBy": [],
+              "having": [],
+              "legend": "p95",
+              "limit": 100,
+              "orderBy": [
+                {
+                  "columnName": "__result",
+                  "order": "desc"
+                }
+              ],
+              "queryName": "B",
+              "selectColumns": [],
+              "stepInterval": 60
+            }
+          ],
+          "queryFormulas": []
+        },
+        "id": "2ce3538c-d9ea-4bd2-b7ba-9dff59fa67ba",
+        "queryType": "builder"
+      },
+      "selectedLogFields": [],
+      "selectedTracesFields": [],
+      "softMax": 0,
+      "softMin": 0,
+      "timePreferance": "GLOBAL_TIME",
+      "title": "LLM operation latency (p95 / p99)",
+      "yAxisUnit": "s"
+    },
+    {
+      "contextLinks": {
+        "linksData": []
+      },
+      "description": "Volume of model calls (agent + judge). Green during quality regressions.",
+      "fillSpans": false,
+      "id": "tr-llm-calls",
+      "legendPosition": "bottom",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "panelTypes": "graph",
+      "query": {
+        "builder": {
+          "queryData": [
+            {
+              "aggregations": [
+                {
+                  "metricName": "gen_ai.client.operation.duration.count",
+                  "spaceAggregation": "sum",
+                  "timeAggregation": "increase"
+                }
+              ],
+              "dataSource": "metrics",
+              "disabled": false,
+              "expression": "A",
+              "filter": {
+                "expression": "service.name = 'claimpilot'"
+              },
+              "functions": [],
+              "groupBy": [],
+              "having": [],
+              "legend": "LLM calls/min",
+              "limit": 100,
+              "orderBy": [
+                {
+                  "columnName": "__result",
+                  "order": "desc"
+                }
+              ],
+              "queryName": "A",
+              "selectColumns": [],
+              "stepInterval": 60
+            }
+          ],
+          "queryFormulas": []
+        },
+        "id": "634fdc22-3a47-4bb7-801f-c6b0e0b096da",
+        "queryType": "builder"
+      },
+      "selectedLogFields": [],
+      "selectedTracesFields": [],
+      "softMax": 0,
+      "softMin": 0,
+      "timePreferance": "GLOBAL_TIME",
+      "title": "LLM calls (per min)",
+      "yAxisUnit": "none"
+    },
+    {
+      "contextLinks": {
+        "linksData": []
+      },
+      "description": "Total tokens consumed. A quality regression does NOT move this — cheap wrong answers look exactly like good ones here.",
+      "fillSpans": false,
+      "id": "tr-tokens",
+      "legendPosition": "bottom",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "panelTypes": "graph",
+      "query": {
+        "builder": {
+          "queryData": [
+            {
+              "aggregations": [
+                {
+                  "metricName": "gen_ai.client.token.usage.sum",
+                  "spaceAggregation": "sum",
+                  "timeAggregation": "increase"
+                }
+              ],
+              "dataSource": "metrics",
+              "disabled": false,
+              "expression": "A",
+              "filter": {
+                "expression": "service.name = 'claimpilot'"
+              },
+              "functions": [],
+              "groupBy": [],
+              "having": [],
+              "legend": "tokens/min",
+              "limit": 100,
+              "orderBy": [
+                {
+                  "columnName": "__result",
+                  "order": "desc"
+                }
+              ],
+              "queryName": "A",
+              "selectColumns": [],
+              "stepInterval": 60
+            }
+          ],
+          "queryFormulas": []
+        },
+        "id": "fbf8a111-7894-4df9-9207-355b30185c1a",
+        "queryType": "builder"
+      },
+      "selectedLogFields": [],
+      "selectedTracesFields": [],
+      "softMax": 0,
+      "softMin": 0,
+      "timePreferance": "GLOBAL_TIME",
+      "title": "Token usage (per min)",
+      "yAxisUnit": "none"
+    },
+    {
+      "contextLinks": {
+        "linksData": []
+      },
+      "description": "Claims processed per minute, all outcomes.",
+      "fillSpans": false,
+      "id": "tr-throughput",
+      "legendPosition": "bottom",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "panelTypes": "graph",
+      "query": {
+        "builder": {
+          "queryData": [
+            {
+              "aggregations": [
+                {
+                  "metricName": "claimpilot.claims.processed",
+                  "spaceAggregation": "sum",
+                  "timeAggregation": "increase"
+                }
+              ],
+              "dataSource": "metrics",
+              "disabled": false,
+              "expression": "A",
+              "filter": {
+                "expression": "service.name = 'claimpilot'"
+              },
+              "functions": [],
+              "groupBy": [],
+              "having": [],
+              "legend": "claims/min",
+              "limit": 100,
+              "orderBy": [
+                {
+                  "columnName": "__result",
+                  "order": "desc"
+                }
+              ],
+              "queryName": "A",
+              "selectColumns": [],
+              "stepInterval": 60
+            }
+          ],
+          "queryFormulas": []
+        },
+        "id": "91331ce0-675b-46fe-b259-a9fe017d28e2",
+        "queryType": "builder"
+      },
+      "selectedLogFields": [],
+      "selectedTracesFields": [],
+      "softMax": 0,
+      "softMin": 0,
+      "timePreferance": "GLOBAL_TIME",
+      "title": "Claim throughput (per min)",
+      "yAxisUnit": "none"
+    },
+    {
+      "contextLinks": {
+        "linksData": []
+      },
+      "description": "Errored claims / all claims. Moves on infrastructure failures (e.g. the broken-tool chaos), NOT on prompt-quality regressions — faithfulness is the only signal that catches those.",
+      "fillSpans": false,
+      "id": "tr-error-rate",
+      "legendPosition": "bottom",
+      "nullZeroValues": "zero",
+      "opacity": "1",
+      "panelTypes": "graph",
+      "query": {
+        "builder": {
+          "queryData": [
+            {
+              "aggregations": [
+                {
+                  "metricName": "claimpilot.claims.processed",
+                  "spaceAggregation": "sum",
+                  "timeAggregation": "increase"
+                }
+              ],
+              "dataSource": "metrics",
+              "disabled": true,
+              "expression": "A",
+              "filter": {
+                "expression": "service.name = 'claimpilot' AND outcome = 'error'"
+              },
+              "functions": [],
+              "groupBy": [],
+              "having": [],
+              "legend": "",
+              "limit": 10000,
+              "orderBy": [
+                {
+                  "columnName": "__result",
+                  "order": "desc"
+                }
+              ],
+              "queryName": "A",
+              "selectColumns": [],
+              "stepInterval": 60
+            },
+            {
+              "aggregations": [
+                {
+                  "metricName": "claimpilot.claims.processed",
+                  "spaceAggregation": "sum",
+                  "timeAggregation": "increase"
+                }
+              ],
+              "dataSource": "metrics",
+              "disabled": true,
+              "expression": "B",
+              "filter": {
+                "expression": "service.name = 'claimpilot'"
+              },
+              "functions": [],
+              "groupBy": [],
+              "having": [],
+              "legend": "",
+              "limit": 10000,
+              "orderBy": [
+                {
+                  "columnName": "__result",
+                  "order": "desc"
+                }
+              ],
+              "queryName": "B",
+              "selectColumns": [],
+              "stepInterval": 60
+            }
+          ],
+          "queryFormulas": [
+            {
+              "aggregations": [],
+              "dataSource": "metrics",
+              "disabled": false,
+              "expression": "A/B",
+              "functions": [],
+              "groupBy": [],
+              "having": [],
+              "legend": "claim error rate",
+              "limit": 100,
+              "orderBy": [
+                {
+                  "columnName": "__result",
+                  "order": "desc"
+                }
+              ],
+              "queryName": "F1",
+              "selectColumns": [],
+              "stepInterval": 60
+            }
+          ]
+        },
+        "id": "8146c78e-2771-4584-8cc1-1ee0fb2f908a",
+        "queryType": "builder"
+      },
+      "selectedLogFields": [],
+      "selectedTracesFields": [],
+      "softMax": 1,
+      "softMin": 0,
+      "timePreferance": "GLOBAL_TIME",
+      "title": "Claim error rate",
+      "yAxisUnit": "none"
+    }
+  ]
+}

@@ -39,7 +39,7 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · **(GATE)** = prove it l
 ## Agent B — SigNoz & Data-plane
 - [ ] SigNoz via Foundry (`gauge → forge → cast`); **commit `casting.yaml` + `casting.yaml.lock`.**
 - [ ] SigNoz MCP server running; API key issued. **(GATE 0)**
-- [ ] `traditional.json` (stays green) + `agent-quality.json` (faithfulness SLI, judge $/1k, etc.).
+- [x] `traditional.json` (stays green) + `agent-quality.json` (faithfulness SLI + grounded ratio + score-by-version + judge/cost panels) — built via the SigNoz MCP against live data (all query shapes dry-run first), exported to `signoz/dashboards/`.
 - [~] **Faithfulness SLO pack**: SLI + SLO (98% grounded) + 7.5× fast-burn rule + absolute floor — authored + calibrated (`signoz/alerts/faithfulness-slo.md`), pushable via `signoz/push-packs.py`. Pending: SIGNOZ_API_KEY, live push, fire-during-regression verification, slow-burn companion.
 - [ ] `cost-velocity.json` + `judge-budget.json`; all webhook the brain.
 - [ ] Webhook channel configured + **Test** passes; tighten window/group-interval for the demo.

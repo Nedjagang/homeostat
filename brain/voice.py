@@ -44,7 +44,7 @@ FLOW_DEFINITION = {
     "states": [
         {"name": "Trigger", "type": "trigger",
          "transitions": [{"event": "incomingMessage"},
-                         {"event": "incomingCall"},
+                         {"event": "incomingCall", "next": "gather_approval"},
                          {"event": "incomingConversationMessage"},
                          {"event": "incomingRequest", "next": "gather_approval"},
                          {"event": "incomingParent"}],
@@ -54,7 +54,12 @@ FLOW_DEFINITION = {
                          {"event": "speech"},
                          {"event": "timeout"}],
          "properties": {"offset": {"x": 0, "y": 200},
-                        "say": "{{flow.data.message}}",
+                        "say": ("{{flow.data.message | default: 'This is Homeostat, the claim "
+                                "agent monitor. Answer quality alert. A prompt release has "
+                                "regressed answer quality. Latency and errors are normal. "
+                                "Proposed fix: roll back to the last healthy version. Details "
+                                "are in the Slack thread. This action is reversible. "
+                                "Press 1 to approve the fix. Press 2 to reject.'}}"),
                         "voice": "Polly.Matthew",
                         "language": "en-US",
                         "number_of_digits": 1,
@@ -107,37 +112,64 @@ def _spoken_summary(report: dict, action: dict) -> str:
 
 
 def call_for_approval(report: dict, action: dict, timeout_s: int = 180) -> tuple[str, str]:
-    """Place the call and poll for the keypress.
-    Returns (approved|rejected|timeout|error, detail)."""
+    """Place the call (plain Calls API — proven path) and hand it to the Studio flow via
+    Twilio's flow-webhook URL; then poll the resulting execution's context for the
+    keypress. Returns (approved|rejected|timeout|error, detail)."""
+    placed_at = time.time()
     try:
-        resp = requests.post(f"{STUDIO}/Flows/{FLOW_SID}/Executions",
-                             auth=(ACCOUNT_SID, AUTH_TOKEN), data={
-                                 "To": ONCALL_PHONE, "From": FROM_NUMBER,
-                                 "Parameters": json.dumps({"message": _spoken_summary(report, action)}),
-                             }, timeout=30)
+        resp = requests.post(
+            f"https://api.twilio.com/2010-04-01/Accounts/{ACCOUNT_SID}/Calls.json",
+            auth=(ACCOUNT_SID, AUTH_TOKEN), data={
+                "To": ONCALL_PHONE, "From": FROM_NUMBER,
+                "Url": f"https://webhooks.twilio.com/v1/Accounts/{ACCOUNT_SID}/Flows/{FLOW_SID}",
+                "Timeout": 25,  # ring seconds before giving up
+            }, timeout=30)
+        body = resp.json()
         if resp.status_code >= 300:
-            return "error", f"call placement failed {resp.status_code}: {resp.text[:200]}"
-        execution_sid = resp.json()["sid"]
-        log.info("voice approval call placed: execution %s to %s", execution_sid, ONCALL_PHONE[-4:])
+            return "error", f"call placement failed {resp.status_code}: {body.get('message', '')[:200]}"
+        call_sid = body["sid"]
+        log.info("voice approval call placed: %s to …%s", call_sid, ONCALL_PHONE[-4:])
     except requests.RequestException as e:
         return "error", f"call placement failed: {e}"
 
+    execution_sid = None
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         time.sleep(5)
         try:
-            ctx = requests.get(f"{STUDIO}/Flows/{FLOW_SID}/Executions/{execution_sid}/Context",
-                               auth=(ACCOUNT_SID, AUTH_TOKEN), timeout=15).json()
-            digits = (ctx.get("context", {}).get("widgets", {})
-                      .get("gather_approval", {}).get("Digits"))
-            if digits == "1":
-                return "approved", "phone keypress 1"
-            if digits is not None:
-                return "rejected", f"phone keypress {digits}"
-            status = requests.get(f"{STUDIO}/Flows/{FLOW_SID}/Executions/{execution_sid}",
-                                  auth=(ACCOUNT_SID, AUTH_TOKEN), timeout=15).json().get("status")
-            if status == "ended":  # hung up / no answer / no keypress
-                return "timeout", "call ended without a keypress"
+            if execution_sid is None:
+                # The flow execution appears once the call is answered; find OURS —
+                # match the contact AND require it to be newer than our placement,
+                # otherwise a stale execution from an earlier call gets picked up.
+                from datetime import datetime, timezone
+                execs = requests.get(f"{STUDIO}/Flows/{FLOW_SID}/Executions?PageSize=5",
+                                     auth=(ACCOUNT_SID, AUTH_TOKEN), timeout=15).json()
+                for ex in execs.get("executions", []):
+                    created = ex.get("date_created", "")
+                    if ex.get("contact_channel_address") != ONCALL_PHONE or not created:
+                        continue
+                    created_ts = datetime.fromisoformat(
+                        created.replace("Z", "+00:00")).timestamp()
+                    if created_ts >= placed_at - 30:
+                        execution_sid = ex["sid"]
+                        break
+            if execution_sid:
+                ctx = requests.get(
+                    f"{STUDIO}/Flows/{FLOW_SID}/Executions/{execution_sid}/Context",
+                    auth=(ACCOUNT_SID, AUTH_TOKEN), timeout=15).json()
+                digits = (ctx.get("context", {}).get("widgets", {})
+                          .get("gather_approval", {}).get("Digits"))
+                if digits == "1":
+                    return "approved", "phone keypress 1"
+                if digits is not None:
+                    return "rejected", f"phone keypress {digits}"
+            call = requests.get(
+                f"https://api.twilio.com/2010-04-01/Accounts/{ACCOUNT_SID}/Calls/{call_sid}.json",
+                auth=(ACCOUNT_SID, AUTH_TOKEN), timeout=15).json()
+            if call.get("status") in ("busy", "no-answer", "failed", "canceled"):
+                return "timeout", f"call {call.get('status')}"
+            if call.get("status") == "completed" and execution_sid is None:
+                return "timeout", "call completed without reaching the flow"
         except requests.RequestException:
             pass  # transient — keep polling until the deadline
     return "timeout", "no keypress before deadline"

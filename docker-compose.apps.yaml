@@ -37,6 +37,22 @@ services:
     command: ["uvicorn", "control:app", "--host", "0.0.0.0", "--port", "8091"]
     restart: unless-stopped
 
+  # The brain: alert webhook -> investigate -> Slack/phone approval -> heal -> verify.
+  # Container name "homeostat-brain" matters: the SigNoz notification channel posts to
+  # http://homeostat-brain:8090/webhook by this name on the shared network.
+  brain:
+    build: ./brain
+    container_name: homeostat-brain
+    networks:
+      - signoz-network
+    env_file:
+      - ./claimpilot/.env
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://signoz-ingester:4318
+      CLAIMPILOT_CONTROL_URL: http://claimpilot:8091
+      SIGNOZ_BASE_URL: http://signoz-signoz-0:8080
+    restart: unless-stopped
+
   # One-shot batch over the sample claims (smoke tests, screenshots) — not the demo path.
   agent:
     build: ./claimpilot

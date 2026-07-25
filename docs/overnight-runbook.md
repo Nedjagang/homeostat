@@ -69,14 +69,20 @@ no VPN, no laptop, no TLS-trust question. This is also where the brain will live
 
 ```bash
 # on the VM (adjust the network name to the SigNoz stack's; `docker network ls`)
-git clone <homeostat repo> && cd homeostat
-cp claimpilot/.env.example claimpilot/.env   # fill: Azure keys, CLAIMPILOT_CONTROL_TOKEN
-# in claimpilot/.env set: OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-ingester:4318  (or the
-# stack's collector container name), CLAIM_INTERVAL_SECONDS=45
-docker compose -f docker-compose.apps.yaml up --build -d claimpilot
+git clone https://github.com/Nedjagang/homeostat.git && cd homeostat
+cp claimpilot/.env.example claimpilot/.env   # fill: Azure keys, control token,
+                                             # Slack tokens, Twilio creds, SigNoz API key
+docker compose -f docker-compose.apps.yaml up --build -d claimpilot brain
 # scheduler (simplest: host python next to it)
 nohup python3 chaos/overnight.py > overnight.log 2>&1 &
 ```
+
+Deploying `brain` on the VM closes the last simulated leg: the SigNoz notification
+channel `homeostat-brain` (webhook `http://homeostat-brain:8090/webhook`) can reach the
+container by name on the shared network, so alerts trigger the brain for real — no
+`/simulate` needed. In-container endpoints are set in the compose file
+(collector `signoz-ingester:4318`, SigNoz API `signoz-signoz-0:8080`, control
+`claimpilot:8091`); verify those container names against `docker ps` on your stack.
 
 `restart: unless-stopped` keeps the service alive across container crashes and VM
 reboots. Port 8091 stays VM-internal (flip flags from the VM shell or an SSH tunnel —

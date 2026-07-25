@@ -4,7 +4,7 @@
 end of the hackathon, SigNoz was catching the lie at 3:33 AM with everyone asleep — and
 healing it in 12 minutes.*
 
-*Team BunkBros — Agents of SigNoz hackathon (WeMakeDevs × SigNoz). Code:
+*Team BunkBros. Code:
 [github.com/Nedjagang/homeostat](https://github.com/Nedjagang/homeostat)*
 
 ---
@@ -12,8 +12,7 @@ healing it in 12 minutes.*
 We were about an hour into testing our claims bot when it told its first lie.
 
 The bot answers insurance questions over policy documents — deductibles, damage limits,
-exclusions. We built it for the Agents of SigNoz hackathon to chase a question that had
-been bugging us at work:
+exclusions. We built it to chase a question that had been bugging us at work:
 
 **If an AI agent starts confidently making things up, would standard monitoring even
 notice?**
@@ -298,10 +297,11 @@ what your first lying trace looked like.
 
 ---
 
-*Disclosures: built for the Agents of SigNoz hackathon on synthetic policy data. We
-prototyped the score-on-the-trace idea in our warm-up entry for this event; this repo
-is a fresh build with no code copied from it. An AI coding assistant did much of the
-building and ran the overnight tests; design decisions and reviews are ours.*
+*Disclosures: built on synthetic policy data as our entry to the Agents of SigNoz
+hackathon. We prototyped the score-on-the-trace idea in our warm-up entry for the
+event; this repo is a fresh build with no code copied from it. An AI coding assistant
+did much of the building and ran the overnight tests; design decisions and reviews are
+ours.*
 
 *Everything — code, dashboards, alert packs, chaos flags, four postmortems, the
 calibration set: [github.com/Nedjagang/homeostat](https://github.com/Nedjagang/homeostat)*

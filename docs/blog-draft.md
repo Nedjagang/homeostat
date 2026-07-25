@@ -1,214 +1,196 @@
-# Our AI agent gave a customer a wrong answer. Every dashboard was green.
+# My AI agent lied to a customer at 10 PM. At 3:33 AM, SigNoz caught it again — and fixed it while I slept.
 
-*Team BunkBros — Agents of SigNoz hackathon. Code:
+*Team BunkBros — Agents of SigNoz hackathon (WeMakeDevs × SigNoz). Code:
 [github.com/Nedjagang/homeostat](https://github.com/Nedjagang/homeostat).*
 
-> DRAFT NOTE (delete before publishing): add a real screenshot wherever you see
-> `[SCREENSHOT]`. Don't publish a claim without its picture.
+> DRAFT NOTE (delete before publishing): add a real screenshot at every `[SCREENSHOT]`
+> marker. Never a claim without its picture.
 
-We built an insurance claims bot. You ask it "is my burst pipe covered?" and it looks
-up the policy documents and answers.
+It was around 10 PM and I was watching our insurance claims bot answer test questions,
+feeling pretty good about life.
 
-One day it told a customer that earthquake damage was "specifically excluded" by their
-policy. Sounds reasonable. Except the policy says nothing about earthquakes. The bot
-made it up.
+Then it told a customer that earthquake damage was "specifically excluded" from their
+policy. Confident. Well-written. Cited nothing, because there was nothing to cite — the
+policy says exactly zero words about earthquakes. The bot made it up.
 
-Here is what our monitoring said while that happened:
-
-- Response time: normal.
-- Token cost: normal.
-- Errors: zero.
+I looked at our monitoring. Response time: fine. Cost: fine. Errors: zero. By every
+number on the screen, this was a perfectly healthy service telling a customer a
+perfectly confident lie.
 
 `[SCREENSHOT: the green dashboard next to the made-up answer]`
 
-That's the problem. Latency, errors, cost — all of it measures whether the bot
-*answered*. None of it measures whether the answer was *true*. For an LLM app, wrong
-answers are the main failure mode, and they are invisible on a normal dashboard.
+That's the gap this whole project lives in. Latency, errors, and cost measure whether
+your bot *answered*. Nothing measures whether the answer was *true*. For an LLM app,
+wrong answers are the failure mode that actually hurts — and they're invisible.
 
-So we spent the hackathon making SigNoz treat truthfulness the way SREs treat uptime.
-Score it on every request. Put the score on the trace. Alert when it drops. Then go one
-step further: when the alert fires, investigate it and fix it, with a human clicking
-approve.
+So for the hackathon we built Homeostat: score every answer for truthfulness, put the
+score on the trace in SigNoz, alert on it like an SLO, and — this is the part I'm proud
+of — when the alert fires, a small service investigates it, posts the evidence to
+Slack, and if nobody responds, **calls my phone** and lets me approve the fix by
+pressing 1.
 
-## Step 1: score every answer
+Here's how it went, including the three bugs that nearly broke us.
 
-After the bot answers, we grade the answer against the documents it actually retrieved.
-Three checks, in order of cost:
+## Scoring every answer (the 30-second version)
 
-1. **Free check.** Did the bot answer even though it retrieved *nothing*? If yes, the
-   answer is made up by definition. Score 0, done. Costs nothing.
-2. **Cheap check.** How many words does the answer share with the retrieved documents?
-   Real answers quote the policy ("$500 deductible, Section 2"). Made-up answers don't,
-   because there is nothing to quote. High overlap = pass, skip the expensive check.
-3. **Expensive check.** A second LLM call reads the question, the retrieved documents,
-   and the answer, and returns a score from 0 to 1 with a one-line reason. This only
-   runs on answers the cheap check found suspicious, plus a 2% random sample to make
-   sure the cheap check itself isn't lying to us.
+After the bot answers, we grade the answer against the policy documents it actually
+retrieved. Three checks, cheapest first:
 
-In our runs, the cheap check cleared about 3 out of 4 answers. So the judge bill drops
-to roughly a quarter of "judge everything", and the alert still works (we tested that —
-more below).
+1. **Free:** did it answer even though it retrieved *nothing*? Then it's made up by
+   definition. Score 0. Done.
+2. **Cheap:** how many words does the answer share with the retrieved documents? Real
+   answers quote the policy ("$500 deductible, Section 2"). Fabricated ones can't.
+   High overlap → pass, skip the expensive check. This cleared ~3 of 4 answers and cut
+   our judge bill to a quarter.
+3. **Expensive:** a second LLM reads question + documents + answer and returns a 0-to-1
+   score with a one-line reason. Only for suspicious answers, plus a 2% random sample
+   to keep the cheap check honest.
 
-The score lands in three places in SigNoz:
+Every verdict lands on the exact trace in SigNoz (we used the standard OpenTelemetry
+`gen_ai.evaluation.*` attribute names — no homemade format), plus a metric for
+dashboards and alerts. Open any bad answer and you see: the question, what was
+retrieved, what the bot said, and why the judge failed it.
 
-- On the **trace**, so you can open the exact request and see the question, the
-  documents, the answer, and why it failed. We used the OpenTelemetry GenAI attribute
-  names (`gen_ai.evaluation.score.value` and friends) so this isn't a homemade format.
-- As a **log event**, so you can pivot from a "bad answer" log line to the trace.
-- As a **metric**, so you can chart it and alert on it. Metric labels are only
-  low-cardinality things like the prompt version. Trace IDs and reasons stay on traces
-  and logs, where high cardinality belongs.
+`[SCREENSHOT: one lying trace open in SigNoz — question, retrieved docs, answer, judge reason]`
 
-`[SCREENSHOT: one bad trace open in SigNoz — question, retrieved docs, answer, judge reason]`
+The alert isn't "score < 0.5" — single scores are noisy (the same claim scored 0.2 and
+0.96 on different runs, purely from rewording). It's an SLO, like uptime: **98% of
+answers in a window should be grounded**, fire when a 10-minute window burns that
+budget about 7× too fast. Windowed ratios, never single scores.
 
-## Step 2: alert on it like an SRE would
+## Bug #1: the model refused to lie
 
-We didn't want "alert if score < 0.5", because single scores are noisy. The same claim
-scored 0.2 on one run and 0.96 on another — the bot words its answer differently every
-time. You'd get paged constantly for nothing.
+To demo any of this, we needed the bot to lie on demand. So we made a chaos switch that
+swaps in an aggressive prompt: "always give a confident decision, never say you are
+unsure."
 
-Instead we set a target, the way you'd set one for availability: **98% of answers in a
-window should be grounded** (grounded = the judge scored it 0.5 or above). The alert
-fires when a 10-minute window is eating that 2% error budget about 7 times faster than
-allowed. In plain terms: fire when roughly 1 in 7 answers is bad, stay quiet when one
-noisy score comes through.
+We flipped it and… nothing. Twenty minutes of "chaos" and the score stayed perfect.
 
-Two things we learned tuning this on real traffic:
+The model just wouldn't do it. It kept answering "the policy doesn't address this" —
+politely ignoring a system prompt that ordered it never to say that. Our judge kept
+correctly scoring that honesty as fine. The eval pipeline wasn't broken. Our failure
+injection was fake.
 
-- Our first window was 5 minutes. At about one claim per minute, that's only 5 or 6
-  answers per window, and pure luck kept the ratio above the line during a real
-  incident. We doubled the window and it caught everything after that.
-- At volume, about 3% of answers score badly even when nothing is wrong (the judge is
-  strict, retrieval occasionally misses). That's *why* the target is 98% and not 100%.
-  We found that number by running 100 claims and counting, not by guessing.
+The fix taught us something real: quality regressions don't ship as evil prompts. They
+ship as *releases* — someone loosens the prompt AND swaps in a cheaper model to save
+money, same change, Friday afternoon. So our chaos switch now does both. The cheap
+model invents policy exclusions happily. And because the model name rides on every
+trace, the investigation later gets two matching clues: prompt version changed, model
+changed. One rollback reverts both.
 
-`[SCREENSHOT: alert history showing fired at 0.80, resolved after the fix]`
+(Honorable mention from earlier that week: our config variable `MODEL` kept coming back
+as `5440`. Windows environment variables are case-insensitive, and Dell laptops ship a
+factory-set `Model=5440` — the laptop's model number. Renamed the variable. Check your
+env vars, folks.)
 
-## The failure we couldn't create (our favorite bug)
+## Bug #2: the 3 AM save, and the freeze that followed
 
-To demo this you need the bot to actually lie on demand. So we added a chaos switch
-that swaps the system prompt to an aggressive one: "always give a confident decision,
-never say you are unsure."
+We left the whole thing running overnight on a laptop: the bot answering claims, a
+chaos scheduler injecting a fake bad release every 3 hours, and the healing loop armed.
 
-We flipped it. Nothing happened.
+At **03:33 AM**, the SLO alert fired — grounded ratio down to 0.75. The brain
+investigated, identified the bad release, rolled it back, watched the ratio recover,
+and closed the incident at 03:45. Twelve minutes, start to finish. Nobody was awake. I
+found out at breakfast, from the alert history.
 
-The model (a strong one) simply refused. It kept saying "the policy doesn't address
-this", politely ignoring the prompt telling it never to say that. And our judge kept
-correctly scoring that honesty as fine. Twenty minutes of injected "chaos" and the
-score never moved.
+`[SCREENSHOT: alert history — fired 03:33 at 0.75, resolved 03:45]`
 
-The fix was to make the failure realistic instead of theatrical. Real quality
-regressions usually ship as a *release*: someone tweaks the prompt AND swaps in a
-cheaper model to save money, in the same change. So our chaos switch now does both.
-The cheap model happily invents policy exclusions. And because the model name is on
-every trace, the change shows up in telemetry twice — the prompt version changed *and*
-the model changed. One rollback undoes both, because that's what reverting a release
-means.
+The morning after the *second* long run was less glamorous: 610 failed claims and the
+processing loop frozen solid — while its own health flag said "alive". Our telemetry in
+SigNoz told the story: the laptop had been quietly suspending (Windows ignores your
+power settings when the lid closes), every wake-up left dead network connections, and
+the OpenAI client ships with **no request timeout by default**. One call blocked
+forever on a dead socket.
 
-## The 3 a.m. failure (the one that humbled us)
+The clue that cracked it: our exporter crashed trying to set a timeout of **minus
+7,885 seconds**. A negative timeout means the clock jumped two hours mid-request —
+which is exactly what suspend/resume looks like from inside a process.
 
-We left the whole thing running overnight, unattended, on a laptop. In the morning:
-610 failed claims and the processing loop frozen since evening. The health flag said
-the loop was alive. It was lying too.
+Three boring fixes, all transferable: put an explicit timeout on every LLM call; treat
+"recently finished real work" as health, never "thread is alive"; and keep a local copy
+of your error logs, because a telemetry pipeline can't report on the network outage
+that's killing it.
 
-What actually happened, pieced together from our own telemetry in SigNoz:
+## The part where my phone rings
 
-1. The laptop kept going to sleep (Windows ignores your power settings when the lid
-   closes).
-2. Every wake-up left dead network connections behind.
-3. The OpenAI client library ships with **no request timeout by default**. One call
-   blocked forever on a dead connection, and the loop sat there holding it.
+The healing loop works like this. The alert fires in SigNoz and hits our little "brain"
+service over a webhook. The brain asks SigNoz the same four questions every time —
+score per prompt version now vs an hour ago, score per model, did latency or errors
+move, which older version was still healthy. It's a fixed checklist on purpose. We did
+not want a free-thinking AI guessing at root causes; the brain can only report numbers
+it queried.
 
-The clue that cracked it: our log exporter crashed trying to set a timeout of
-**minus 7,885 seconds**. A negative timeout means the clock jumped two hours mid-request
-— which is exactly what suspend/resume looks like from inside a process.
+Then it posts the evidence to Slack with two buttons.
 
-Three fixes, all boring, all things we'd tell any SRE to check on any LLM service:
+`[SCREENSHOT: the Slack report — evidence lines, Approve heal / Reject]`
 
-- Set an explicit timeout on every LLM call. Every one.
-- Don't trust "the thread is alive" as health. Track "when did we last finish a unit of
-  work" instead.
-- Keep a local copy of your error logs. Ours went only to the telemetry pipeline, which
-  was down for the same reason everything else was. The network can't report on itself.
+In our live drill it wrote: version v_overconfident averaging 0.74, the low scores all
+on the cheap model, latency and errors flat, proposing rollback to **v2_concise**. That
+rollback target impressed me more than anything else we built — nobody hardcoded it.
+The brain picked v2_concise because our own telemetry showed it was the most recent
+version that was actually healthy. It read the answer out of SigNoz.
 
-## Step 3: close the loop
+I clicked Approve. The brain called the bot's admin API, pinned the healthy version,
+then watched the same metric the alert fired on until it recovered: 0.80… 0.85… 0.95.
+Recovered. It saved the whole incident as a regression test file and posted the receipt
+in the thread. Alert to verified recovery: **2 minutes 49 seconds**.
 
-When the alert fires, a small service we call the brain wakes up. It asks SigNoz four
-questions, always the same four (it's a fixed checklist, not a free-thinking agent —
-we did not want an AI guessing at root causes):
+And if nobody clicks the Slack buttons? Three minutes later **the phone rings**. A
+voice reads the incident: *"This is Homeostat. Answer quality alert. Version
+v-overconfident is producing unsupported answers. Proposed fix: roll back to the last
+healthy version. Press 1 to approve. Press 2 to reject."* Press 1, hang up, done. (We
+learned the hard way that Twilio trial accounts eat the first three seconds of every
+call behind a "press any key" gate — our first three test calls died there. Upgrade the
+account before you demo.)
 
-1. What's the average score per prompt version, in the incident window vs the hour
-   before?
-2. Same question, per model.
-3. Did error rate move? Did latency move?
-4. Which older version was still healthy?
+No approval, no action — ever. The brain can do exactly two things, both reversible,
+both behind a human decision. If the metric doesn't recover, it says so and escalates
+instead of retrying. Restraint is a feature.
 
-Then it posts what it found to Slack, with the numbers, and two buttons.
-
-`[SCREENSHOT: the Slack message — evidence lines, Approve heal / Reject buttons]`
-
-Here's the message from our live run, paraphrased: *"Version v_overconfident is
-averaging 0.74. Version v1_grounded is at 1.00. The low scores are all on the cheap
-model. Error rate and latency didn't move. Proposing: pin back to v2_concise."*
-
-Note the proposed rollback target: **v2_concise**, not the oldest safe prompt. The
-brain picked it because our version history showed it was the most recent version that
-was actually healthy in the data. Nobody hardcoded that. It read it out of SigNoz.
-
-One of us clicked Approve. The brain called the bot's admin API, pinned the old
-version, then watched the same metric the alert fired on. Ten minutes later the ratio
-was back above target and it posted "recovered" in the thread. The whole incident, from
-alert to verified recovery, also exists as a trace in SigNoz — the fixer is monitored
-by the same system as the thing it fixed.
-
-If nobody clicks? It times out and does nothing. If the metric doesn't recover? It
-says so and escalates. The brain can only do two things, both reversible, both behind
-a human click. That restraint is deliberate.
+`[SCREENSHOT: homeostat-brain's own trace in SigNoz — investigate, await approval, remediate, verify]`
 
 ## Did we just trust an LLM to grade an LLM?
 
-Partly, yes — so we measured how good the grader is instead of assuming. We generated
-40 graded answers across all the combinations (honest prompt, aggressive prompt, strong
-model, cheap model) and had them labeled independently, then compared labels against
-the judge.
+Partly — so we measured it instead of assuming. We generated 40 graded answers across
+every combination (honest/aggressive prompt × strong/cheap model) and had them labeled
+independently, then compared against the judge: agreement on 38 of 40, and the judge
+never flagged a good answer as bad — so the alert doesn't cry wolf.
 
-Result: agreement on 38 of 40. The judge never flagged a good answer as bad (that
-matters — it means the alert doesn't cry wolf). It missed 2 of 7 bad ones, and both
-misses were the same trick: an answer where every sentence is true but it answers a
-*different question* than the one asked. A truthfulness grader can't see that, and
-neither can word overlap. Checking "did you answer the actual question" is a separate
-grader we haven't built yet. It's the clearest next step, and we know that because the
-measurement told us.
+The two misses were the interesting part. Both were answers where every sentence was
+true but they answered a *different question* than the one asked (asked about driving a
+rental car in Mexico; answered about rental reimbursement). A truthfulness grader can't
+see that. Neither can word overlap. "Did you answer the actual question" is a separate
+check we haven't built — and we know that precisely because the measurement told us.
 
-Honesty note: the independent labels came from an AI assistant reading each answer
-against the documents, not from human annotators. So this measures two graders
-agreeing, not ground truth. It's in the repo (`chaos/calibration/`) if you want to
-re-label it yourself.
+Full disclosure: the independent labels came from an AI assistant reading each answer
+against the documents, not human annotators. It measures two graders agreeing, not
+ground truth. The whole set is in the repo if you want to re-label it.
 
-## The numbers, in one place
+## The scoreboard
 
 | What | Measured |
 |---|---|
-| Alert fired at | grounded ratio 0.80 (threshold 0.85, 10-min window) |
-| Unattended incident at 03:33 | fired at 0.75, self-healed, resolved 12 min later |
+| Alert fired at | ratio 0.80 (threshold 0.85, 10-min window) |
+| Unattended incident, 03:33 AM | fired at 0.75, self-healed, resolved in 12 min |
 | Alert → verified recovery (drill) | 2 min 49 s |
-| Judge calls saved by the cheap check | ~73% at healthy baseline |
-| Judge vs independent labels | 38/40 agree, no false alarms |
+| Judge calls saved by the cheap check | ~73% |
+| Judge vs independent labels | 38/40, zero false alarms |
 | Load test | 100 claims, 3.2 min, 0 errors, zero new metric series |
 
-## If you run LLMs in production, steal these
+## Advice to my past self
 
-1. Put a quality score on every response, attached to the trace. Even a crude one.
+1. Put a quality score on every LLM response, attached to the trace. Even a crude one.
    You cannot debug what you cannot see.
-2. Alert on a windowed ratio with an explicit target, never on single scores.
-3. Timeout every LLM call. The default is infinite.
-4. "Process is alive" is not health. "Recently did useful work" is health.
-5. If you use an LLM judge, measure it against independent labels before you trust it
-   with your pager.
+2. Alert on a windowed ratio with a target, never on single scores.
+3. Timeout every LLM call. The default is infinite. Yes, really.
+4. "The process is alive" is not health. "It recently finished real work" is health.
+5. If an LLM judge guards your pager, measure it against independent labels first.
 
-## Disclosures
+If you run agents in production and this made you want to see your own bot's first
+lying trace — try it, and tell me what you find. I genuinely want to know how many
+green dashboards are lying right now.
 
-We prototyped the score-on-the-trace idea in a pre-hackathon warm-up post; this repo is
-a fresh build with no code copied from it. An AI coding assistant did a lot of the
-building and ran the overnight tests; the design calls and the reviews are ours. The
-calibration labels are AI-produced, as stated above.
+*Disclosures: we prototyped the score-on-the-trace idea in our warm-up entry for this
+event; this repo is a fresh build with no code copied from it. An AI coding assistant
+did a lot of the building and ran the overnight tests; the design decisions and reviews
+are ours. Calibration labels are AI-produced, as stated above.*

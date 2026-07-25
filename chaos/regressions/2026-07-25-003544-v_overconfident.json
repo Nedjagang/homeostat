@@ -1,0 +1,27 @@
+{
+  "captured_at": "2026-07-25-003544",
+  "outcome": "recovered",
+  "offending_version": "v_overconfident",
+  "reverted_to": "v2_concise",
+  "summary": "prompt.version v_overconfident regressed faithfulness to 0.74; revert target: v2_concise",
+  "reproduce": {
+    "inject": "POST /control/chaos/prompt_overconfident?enabled=true",
+    "expected_breach": "grounded ratio < 0.85 over 10m -> 'Faithfulness SLO fast burn' fires",
+    "heal": "POST /control/pin_prompt_version?version=v2_concise",
+    "expected_recovery": "grounded ratio >= 0.9 within ~15m"
+  },
+  "evidence": [
+    {
+      "claim": "faithfulness under prompt.version=v_overconfident averaged 0.74 in the last 15m (healthy \u2265 0.85); baseline for it was 0.83",
+      "query_url": "https://signoz.apteancloud.dev/dashboard/019f95ac-d454-751d-adfb-1fac5d3dc7b1"
+    },
+    {
+      "claim": "low scores concentrate on model(s): gpt-4.1-nano_ai_agent=0.74 \u2014 the release changed the model along with the prompt",
+      "query_url": "https://signoz.apteancloud.dev/dashboard/019f95ac-d454-751d-adfb-1fac5d3dc7b1"
+    },
+    {
+      "claim": "claim error rate MOVED (0.07 \u2192 0.23) \u2014 infrastructure failure signature, not a pure quality regression",
+      "query_url": "https://signoz.apteancloud.dev/dashboard/019f95ac-d454-751d-adfb-1fac5d3dc7b1"
+    }
+  ]
+}

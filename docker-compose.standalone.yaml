@@ -1,0 +1,32 @@
+# Standalone deployment: ClaimPilot + brain on a VM that is NOT the SigNoz host.
+# Talks to SigNoz over its public URLs (set in claimpilot/.env:
+# OTEL_EXPORTER_OTLP_ENDPOINT + SIGNOZ_BASE_URL). No external docker network needed.
+#
+#   docker compose -f docker-compose.standalone.yaml up --build -d
+#
+# The brain listens on :8090. For REAL alert-webhook delivery, the SigNoz host must
+# be able to reach this VM on 8090; then update the SigNoz notification channel URL
+# from http://homeostat-brain:8090/webhook to http://<this-vm>:8090/webhook.
+# Until then, test delivery with:  curl -X POST http://localhost:8090/simulate
+
+services:
+  claimpilot:
+    build: ./claimpilot
+    container_name: claimpilot
+    env_file:
+      - ./claimpilot/.env
+    ports:
+      - "127.0.0.1:8091:8091"   # control API: local + tunnels only, not the internet
+    command: ["uvicorn", "control:app", "--host", "0.0.0.0", "--port", "8091"]
+    restart: unless-stopped
+
+  brain:
+    build: ./brain
+    container_name: homeostat-brain
+    env_file:
+      - ./claimpilot/.env
+    environment:
+      CLAIMPILOT_CONTROL_URL: http://claimpilot:8091
+    ports:
+      - "8090:8090"             # alert webhook receiver (reachable by the SigNoz host)
+    restart: unless-stopped

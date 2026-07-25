@@ -2,6 +2,10 @@
 
 Everything below is real and tested; nothing is mocked. Prep and fallbacks at the end.
 
+**The submission form requires the video to cover five elements — mapped here:**
+overview (Shot 1), architecture + tech stack (Shot 1.5), demo (Shots 2–7),
+learning outcomes (Shot 8). Don't cut 1.5 or 8.
+
 **Cast:** ClaimPilot service (`:8091`), brain (`:8090`), SigNoz at
 `https://signoz.apteancloud.dev`, Slack `#all-bunkbros-signoz-alerts`.
 
@@ -19,6 +23,14 @@ $env:CLAIM_INTERVAL_SECONDS = "5"        # demo density
 Traditional dashboard, last 30 min: latency flat, tokens flat, error rate zero.
 > "Latency fine, cost fine, zero errors. By everything we monitor, this insurance agent
 > is healthy. Now watch it lie."
+
+## Shot 1.5 — architecture + tech stack in one breath (~20s)
+One slide/diagram (the ASCII from the README rendered nicely):
+> "The stack: a LangChain claims agent with RAG, auto-instrumented by OpenLIT, exporting
+> OpenTelemetry to self-hosted SigNoz — installed via Foundry, casting file in the repo.
+> Every answer is scored by a three-tier eval funnel and the verdict lands on the trace.
+> SigNoz alerts on it as an SLO, and a small Python 'brain' service investigates over
+> the SigNoz MCP server and heals with human approval via Slack or a phone call."
 
 ## Shot 2 — inject the regression (~15s)
 Terminal, on camera:
@@ -66,6 +78,13 @@ applied `pin_prompt_version(v1_grounded)` → "verifying…" → (time-lapse or 
 Traces Explorer → service `homeostat-brain`: the incident trace with investigate /
 await_approval / remediate / verify spans, `homeostat.action` attributes.
 > "The whole loop lives in SigNoz — including the thing doing the healing."
+
+## Shot 8 — learnings (~15s, talking head or text over the recovered dashboard)
+> "Three things we learned: strong models resist bad prompts — real regressions ship as
+> releases, prompt and model together. LLM clients have no default timeout — one dead
+> socket froze our loop for hours while 'alive' stayed green. And judge scores are noisy
+> per-answer — alert on windowed ratios, never single scores. All four postmortems are
+> in the repo."
 
 ## Pacing & fallbacks
 - The slow segments are alert-fire (~6–10 min) and recovery (~10 min). Record them as

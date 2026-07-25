@@ -38,6 +38,7 @@ import investigate as investigator
 import remediate
 import slack
 import verify
+import voice
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("homeostat.brain")
@@ -50,6 +51,11 @@ trace.set_tracer_provider(_provider)
 tracer = trace.get_tracer("homeostat-brain")
 
 APPROVAL_TIMEOUT_S = int(os.getenv("BRAIN_APPROVAL_TIMEOUT_S", "900"))
+# Escalation chain: wait this long for a Slack click, then CALL the on-call phone
+# (voice.py, Twilio) and take the approval as a keypress. Only active when the
+# Twilio env vars are configured; otherwise Slack gets the whole approval window.
+SLACK_WAIT_S = int(os.getenv("BRAIN_SLACK_WAIT_S", "180"))
+VOICE_WAIT_S = int(os.getenv("BRAIN_VOICE_WAIT_S", "180"))
 # Unattended-drill mode: applies the proposed action WITHOUT a human click. OFF by
 # default — the product's restraint story requires human approval; this exists only so
 # scheduled/overnight drills can exercise the full heal+verify path. Every use is
@@ -98,15 +104,27 @@ def handle_incident(alert: dict) -> None:
             return  # nothing to apply; the evidence report was the whole job
 
         with tracer.start_as_current_span("brain.await_approval") as span:
+            channel = "slack"
             if AUTO_APPROVE:
                 decision, user = "approved", "AUTO-APPROVE (unattended drill mode)"
                 slack.post_update("⚙️ unattended drill mode: proposed action auto-approved.",
                                   thread_ts)
             else:
-                decision, user = slack.wait_approval(incident_id, APPROVAL_TIMEOUT_S)
+                slack_window = SLACK_WAIT_S if voice.configured() else APPROVAL_TIMEOUT_S
+                decision, user = slack.wait_approval(incident_id, slack_window)
+                if decision == "timeout" and voice.configured():
+                    slack.post_update(f"⏱️ no Slack response in {slack_window // 60} min — "
+                                      f"calling the on-call phone…", thread_ts)
+                    with tracer.start_as_current_span("brain.voice_escalation") as vspan:
+                        vspan.set_attribute("homeostat.action", "voice_escalation")
+                        decision, user = voice.call_for_approval(report, action, VOICE_WAIT_S)
+                        vspan.set_attribute("approval.decision", decision)
+                    channel = "voice"
+                    slack.post_update(f"📞 phone decision: *{decision}* ({user})", thread_ts)
             span.set_attribute("approval.decision", decision)
+            span.set_attribute("approval.channel", channel)
             span.set_attribute("approval.user", user or "")
-        log.info("[%s] decision: %s (by %s)", incident_id, decision, user)
+        log.info("[%s] decision: %s via %s (%s)", incident_id, decision, channel, user)
 
         if decision != "approved":
             slack.post_update(f"No action applied ({decision}). The alert will keep firing "

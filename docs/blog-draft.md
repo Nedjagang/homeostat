@@ -1,205 +1,214 @@
-# My AI agent lied to customers while every dashboard stayed green — so we taught SigNoz to catch it, alert on it, and heal it
+# Our AI agent gave a customer a wrong answer. Every dashboard was green.
 
-*Team BunkBros — Agents of SigNoz hackathon, Track 1: AI & Agent Observability. Repo:
-[Nedjagang/homeostat](https://github.com/Nedjagang/homeostat).*
+*Team BunkBros — Agents of SigNoz hackathon. Code:
+[github.com/Nedjagang/homeostat](https://github.com/Nedjagang/homeostat).*
 
-> DRAFT NOTE (delete before publishing): postmortem voice, first person. Every
-> `[SCREENSHOT: …]` marker needs a real capture — never a result without a screenshot.
+> DRAFT NOTE (delete before publishing): add a real screenshot wherever you see
+> `[SCREENSHOT]`. Don't publish a claim without its picture.
 
-## The gap
+We built an insurance claims bot. You ask it "is my burst pipe covered?" and it looks
+up the policy documents and answers.
 
-Here is a trace from our insurance-claims agent answering a customer:
+One day it told a customer that earthquake damage was "specifically excluded" by their
+policy. Sounds reasonable. Except the policy says nothing about earthquakes. The bot
+made it up.
 
-- latency: normal
-- tokens: normal
-- errors: zero
-- the answer: a confidently invented policy determination, citing coverage that does
-  not exist
+Here is what our monitoring said while that happened:
 
-`[SCREENSHOT: traditional dashboard all green + the lying span side by side]`
+- Response time: normal.
+- Token cost: normal.
+- Errors: zero.
 
-OpenTelemetry can tell you a span returned 1,200 tokens in 850 ms. It cannot tell you
-those tokens were false. Every traditional golden signal — latency, traffic, errors,
-saturation — measures *whether the system answered*, not *whether the answer was true*.
-For an LLM agent, truth is the failure mode that matters, and it is invisible on every
-dashboard you already have. SigNoz knows this gap exists — it's the heart of their LLM
-observability discussions (issues [#8865](https://github.com/SigNoz/signoz/issues/8865)
-and [#1590](https://github.com/SigNoz/signoz/issues/1590)) — and this project is our
-attempt at the missing layer, built entirely on stock SigNoz.
+`[SCREENSHOT: the green dashboard next to the made-up answer]`
 
-Homeostat makes **answer faithfulness a first-class golden signal in SigNoz**: scored on
-every request, attached to the exact trace, aggregated into an SLI with an SLO and a
-burn-rate alert — then closes the loop with an investigator that reads the evidence out
-of SigNoz and applies a reversible, human-approved, verified heal.
+That's the problem. Latency, errors, cost — all of it measures whether the bot
+*answered*. None of it measures whether the answer was *true*. For an LLM app, wrong
+answers are the main failure mode, and they are invisible on a normal dashboard.
 
-## The system in one diagram
+So we spent the hackathon making SigNoz treat truthfulness the way SREs treat uptime.
+Score it on every request. Put the score on the trace. Alert when it drops. Then go one
+step further: when the alert fires, investigate it and fix it, with a human clicking
+approve.
 
-```
-ClaimPilot (LangChain agent + RAG over policy docs)
-   │  every claim: one root span, prompt.version + model on it
-   │  eval funnel scores every answer:
-   │    Tier 0  deterministic ($0): answered with no context and no abstention?
-   │    Tier 1  lexical overlap ($0): suspicious answers only go on
-   │    Tier 2  LLM judge: 0..1 score + one-line reason
-   │  verdict → span attrs (OTel GenAI semconv) + gen_ai.evaluation.result event
-   │           + bounded metrics (score histogram, verdict counter, judge tokens)
-   ▼
-SigNoz: dashboards (quality vs traditional) · SLO 98% grounded ·
-        burn-rate alert → webhook → the brain
-   ▼
-Brain: bounded MCP investigation → evidence-linked Slack report →
-       human Approve → pin_prompt_version (reversible) → SLI verified recovered
-       → incident saved as a regression test — and the brain traces itself into SigNoz
-```
+## Step 1: score every answer
 
-## Faithfulness as an SLO, not a magic threshold
+After the bot answers, we grade the answer against the documents it actually retrieved.
+Three checks, in order of cost:
 
-Every verdict increments `gen_ai.evaluation.verdicts{label=grounded|unsupported}`. The
-SLI is a good-events ratio — grounded verdicts over all verdicts — with an explicit SLO:
-**98% of claims grounded**. The headline alert fires when a 10-minute window burns the
-2% error budget at 7.5× (ratio < 0.85), with an absolute floor on the true windowed
-average score (histogram sum/count) as a backstop for uniform quality sag.
+1. **Free check.** Did the bot answer even though it retrieved *nothing*? If yes, the
+   answer is made up by definition. Score 0, done. Costs nothing.
+2. **Cheap check.** How many words does the answer share with the retrieved documents?
+   Real answers quote the policy ("$500 deductible, Section 2"). Made-up answers don't,
+   because there is nothing to quote. High overlap = pass, skip the expensive check.
+3. **Expensive check.** A second LLM call reads the question, the retrieved documents,
+   and the answer, and returns a score from 0 to 1 with a one-line reason. This only
+   runs on answers the cheap check found suspicious, plus a 2% random sample to make
+   sure the cheap check itself isn't lying to us.
 
-`[SCREENSHOT: Agent Quality dashboard during a regression — SLI dropping, by-version
-panel splitting]`
+In our runs, the cheap check cleared about 3 out of 4 answers. So the judge bill drops
+to roughly a quarter of "judge everything", and the alert still works (we tested that —
+more below).
 
-Two calibration lessons we hit in practice, not in theory:
+The score lands in three places in SigNoz:
 
-- **Judge scores are noisy per-claim.** The same claim scored 0.2 on one run and 0.96 on
-  another, because the agent words its answers differently each time. Alert on windowed
-  aggregates, never on single claims.
-- **Sparse traffic breaks short windows.** At ~1 claim/minute, a 5-minute window holds
-  five or six claims; shuffle clumping kept the window ratio above threshold through a
-  real regression (we measured 0.87 while the true rate was ~0.75). Doubling the window
-  halved the variance; the threshold stayed as calibrated.
+- On the **trace**, so you can open the exact request and see the question, the
+  documents, the answer, and why it failed. We used the OpenTelemetry GenAI attribute
+  names (`gen_ai.evaluation.score.value` and friends) so this isn't a homemade format.
+- As a **log event**, so you can pivot from a "bad answer" log line to the trace.
+- As a **metric**, so you can chart it and alert on it. Metric labels are only
+  low-cardinality things like the prompt version. Trace IDs and reasons stay on traces
+  and logs, where high cardinality belongs.
 
-When it fired for real, the alert history recorded `firing` at SLI **0.80**, then
-`inactive` after the heal's grounded data dominated the window. Later that night a fully
-unattended cycle fired at 0.75 at 03:33 UTC and resolved twelve minutes later — nobody
-was awake.
+`[SCREENSHOT: one bad trace open in SigNoz — question, retrieved docs, answer, judge reason]`
 
-`[SCREENSHOT: alert history showing the fire/resolve transitions with SLI values]`
+## Step 2: alert on it like an SRE would
 
-## The regression that wouldn't regress
+We didn't want "alert if score < 0.5", because single scores are noisy. The same claim
+scored 0.2 on one run and 0.96 on another — the bot words its answer differently every
+time. You'd get paged constantly for nothing.
 
-Our chaos flag swapped the system prompt for an overconfident one — "always give a
-definitive answer, never say you are unsure." The plan: faithfulness tanks, alert fires.
+Instead we set a target, the way you'd set one for availability: **98% of answers in a
+window should be grounded** (grounded = the judge scored it 0.5 or above). The alert
+fires when a 10-minute window is eating that 2% error budget about 7 times faster than
+allowed. In plain terms: fire when roughly 1 in 7 answers is bad, stay quiet when one
+noisy score comes through.
 
-The model refused to lie.
+Two things we learned tuning this on real traffic:
 
-Eighteen minutes of injected chaos, and `gpt-5.6-sol` kept calmly answering *"the policy
-does not address this"* — despite explicit instructions never to refuse — and the judge
-correctly kept scoring that honesty as grounded. The eval pipeline was fine; the failure
-injection was fake. Real regressions don't come from cartoon-villain prompts; they come
-from **releases** — someone loosens the prompt *and* downgrades the model to cut costs
-in the same change. So a prompt version became a release: `v_overconfident` also swaps
-to a weak nano deployment, which happily fabricates policy determinations. Bonus: the
-trace now carries a second correlated signal (`gen_ai.request.model` changes with
-`prompt.version`), and one heal reverts both — because that's what rolling back a
-release means.
+- Our first window was 5 minutes. At about one claim per minute, that's only 5 or 6
+  answers per window, and pure luck kept the ratio above the line during a real
+  incident. We doubled the window and it caught everything after that.
+- At volume, about 3% of answers score badly even when nothing is wrong (the judge is
+  strict, retrieval occasionally misses). That's *why* the target is 98% and not 100%.
+  We found that number by running 100 claims and counting, not by guessing.
 
-## The money shot
+`[SCREENSHOT: alert history showing fired at 0.80, resolved after the fix]`
 
-Filter spans where `gen_ai.evaluation.score.value < 0.5`. Open one. On a single trace:
-the customer's question, the policy clauses that were actually retrieved, the confident
-wrong answer, and the judge's one-line explanation of why it's unsupported. One more
-pivot: the WARN log `unsupported answer` carries the trace_id back to the same span.
+## The failure we couldn't create (our favorite bug)
 
-`[SCREENSHOT: the lying span with prompt, retrieved chunks, and judge explanation]`
+To demo this you need the bot to actually lie on demand. So we added a chaos switch
+that swaps the system prompt to an aggressive one: "always give a confident decision,
+never say you are unsure."
 
-## The judge's own economics
+We flipped it. Nothing happened.
 
-An LLM judge on every answer doubles your inference bill. The funnel keeps it cheap:
-Tier 0 catches "answered with nothing retrieved and no abstention" for free; Tier 1
-(lexical overlap between answer and retrieved context) clears high-overlap answers for
-free; only suspicious answers plus a ~2% calibration sample reach the judge. The routing
-decision (`tier0:fail`, `tier1:clear`, `judge:suspicious`, `judge:calibration`) is a
-span attribute, and judge token spend is its own metric — the eval layer's cost sits on
-the same dashboard as the quality it buys.
+The model (a strong one) simply refused. It kept saying "the policy doesn't address
+this", politely ignoring the prompt telling it never to say that. And our judge kept
+correctly scoring that honesty as fine. Twenty minutes of injected "chaos" and the
+score never moved.
 
-`[SCREENSHOT: verdicts-by-eval-tier pie + judge token panel before/after funnel]`
+The fix was to make the failure realistic instead of theatrical. Real quality
+regressions usually ship as a *release*: someone tweaks the prompt AND swaps in a
+cheaper model to save money, in the same change. So our chaos switch now does both.
+The cheap model happily invents policy exclusions. And because the model name is on
+every trace, the change shows up in telemetry twice — the prompt version changed *and*
+the model changed. One rollback undoes both, because that's what reverting a release
+means.
 
-Measured live: at healthy baseline the funnel cleared **8 of 11 claims without a judge
-call** (~27% judge share, down from 100%), and a 13-minute chaos window under the funnel
-still dragged the grounded ratio to **0.80** — below the alert threshold. The gating
-saves money without blinding the alert.
+## The 3 a.m. failure (the one that humbled us)
 
-And the judge is treated as a **measured signal, not ground truth**: the repo ships a
-calibration set (question, context, answer, judge verdict) with independent labels and
-an agreement report (`chaos/calibration/report.md`): **95% agreement (38/40), Cohen's
-κ = 0.80, judge precision on `unsupported` 5/5 — zero false alarms — recall 5/7.** The
-two misses are the interesting part: both are *relevance dodges* — answers whose every
-sentence is context-true but which answer a different question than asked. Those evade
-a faithfulness-only judge AND lexical overlap by construction; `answer_relevance` as a
-second named evaluation is the documented next step.
+We left the whole thing running overnight, unattended, on a laptop. In the morning:
+610 failed claims and the processing loop frozen since evening. The health flag said
+the loop was alive. It was lying too.
 
-## The brain: restraint as a feature
+What actually happened, pieced together from our own telemetry in SigNoz:
 
-When the SLO alert fires, the brain investigates through the SigNoz MCP server with a
-*fixed, bounded playbook*: score by `prompt.version` in the incident window vs baseline,
-the same by model, and a check that the traditional signals did NOT move. It cannot ask
-an unbounded question, so it cannot hallucinate a root cause — every sentence in its
-Slack report is a number it queried.
+1. The laptop kept going to sleep (Windows ignores your power settings when the lid
+   closes).
+2. Every wake-up left dead network connections behind.
+3. The OpenAI client library ships with **no request timeout by default**. One call
+   blocked forever on a dead connection, and the loop sat there holding it.
 
-Then it proposes exactly one of two allowlisted, reversible actions
-(`pin_prompt_version`, `circuit_break`) and waits for a human to click **Approve** in
-Slack (Socket Mode — the brain opens a websocket outward, so it needs no public
-endpoint). After applying, it polls the same SLI the alert fired on until recovery
-clears 0.90, or escalates. Either way the incident is saved as a reproducible regression
-case. The brain traces its own investigate → approve → remediate → verify stages into
-the same SigNoz, tagged `homeostat.action` — the healer is observable next to the damage
-it healed.
+The clue that cracked it: our log exporter crashed trying to set a timeout of
+**minus 7,885 seconds**. A negative timeout means the clock jumped two hours mid-request
+— which is exactly what suspend/resume looks like from inside a process.
 
-`[SCREENSHOT: Slack report with evidence bullets + Approve button; the recovery thread]`
-`[SCREENSHOT: homeostat-brain trace in SigNoz with the four stages]`
+Three fixes, all boring, all things we'd tell any SRE to check on any LLM service:
 
-## What genuinely broke (the section that earns the rest)
+- Set an explicit timeout on every LLM call. Every one.
+- Don't trust "the thread is alive" as health. Track "when did we last finish a unit of
+  work" instead.
+- Keep a local copy of your error logs. Ours went only to the telemetry pipeline, which
+  was down for the same reason everything else was. The network can't report on itself.
 
-1. **The model refused to lie** (above) — our failure injection was too weak for an
-   aligned model; realism fixed it.
-2. **Liveness is not progress.** After a 21-hour autonomous run: 610 failed claims and a
-   loop frozen for good — while `loop_alive` (thread aliveness) reported true. The
-   laptop had been suspending; resumes left dead VPN sockets; and `ChatOpenAI` ships
-   with **no request timeout**, so one claim blocked forever on a dead socket. Fixes:
-   explicit timeouts on every LLM call, staleness (`last_claim_at`) as the real health
-   signal, and WARNING+ logs to a second channel — because OTLP-only logging is blind
-   precisely when the network is the thing that's failing. The diagnosis itself came
-   from our own telemetry in SigNoz, including an exporter crash trying to set a
-   **negative 7,885-second timeout** — the signature of a suspend/resume clock jump.
-3. **Two official tools, two schemas.** Dashboards created via the SigNoz MCP server
-   rendered as *legacy* — the new Dashboards V2 experience enforces a Perses-based v6
-   schema the MCP doesn't write yet, and there's no in-place conversion. We rebuilt them
-   natively against `POST /api/v2/dashboards`, and our import script now speaks v6.
+## Step 3: close the loop
 
-## Standing on the spec
+When the alert fires, a small service we call the brain wakes up. It asks SigNoz four
+questions, always the same four (it's a fixed checklist, not a free-thinking agent —
+we did not want an AI guessing at root causes):
 
-Verdicts use the exact OTel GenAI semantic-convention names — `gen_ai.evaluation.name`,
-`gen_ai.evaluation.score.value`, `gen_ai.evaluation.score.label`,
-`gen_ai.evaluation.explanation` — and every verdict is *also* emitted as a
-`gen_ai.evaluation.result` log event, the emission shape the conventions standardize.
-The metrics are ours (the spec defines no evaluation metric yet), with deliberately
-bounded labels — and we tested the claim: a 100-claim replay at concurrency 5 (3.2
-minutes, 0 errors) created **zero new metric series dimensions**; the only cardinality
-delta was one `service.instance.id` for the loadgen process itself. Claim ids, trace
-ids, and judge explanations live on spans and events, where high cardinality belongs.
+1. What's the average score per prompt version, in the incident window vs the hour
+   before?
+2. Same question, per model.
+3. Did error rate move? Did latency move?
+4. Which older version was still healthy?
 
-## Limits, honestly — and future work
+Then it posts what it found to Slack, with the numbers, and two buttons.
 
-One service, synthetic claims, a lexical Tier-1 (embedding/NLI is the upgrade path), an
-AI-labeled calibration set, and a judge that shares a provider with the agent it judges.
-The SLO thresholds are calibrated to this corpus's answerable/unanswerable mix. Next:
-false-positive/noise tuning over longer horizons, more failure classes (retrieval
-poisoning is stubbed), and the anomaly-detection alert type instead of fixed burn rates.
+`[SCREENSHOT: the Slack message — evidence lines, Approve heal / Reject buttons]`
 
-Everything is in the repo — the agent, the funnel, importable dashboard + alert packs
-(one script against a fresh SigNoz), the brain, the chaos flags that reproduce every
-failure class, and the regression cases the brain saved.
+Here's the message from our live run, paraphrased: *"Version v_overconfident is
+averaging 0.74. Version v1_grounded is at 1.00. The low scores are all on the cheap
+model. Error rate and latency didn't move. Proposing: pin back to v2_concise."*
+
+Note the proposed rollback target: **v2_concise**, not the oldest safe prompt. The
+brain picked it because our version history showed it was the most recent version that
+was actually healthy in the data. Nobody hardcoded that. It read it out of SigNoz.
+
+One of us clicked Approve. The brain called the bot's admin API, pinned the old
+version, then watched the same metric the alert fired on. Ten minutes later the ratio
+was back above target and it posted "recovered" in the thread. The whole incident, from
+alert to verified recovery, also exists as a trace in SigNoz — the fixer is monitored
+by the same system as the thing it fixed.
+
+If nobody clicks? It times out and does nothing. If the metric doesn't recover? It
+says so and escalates. The brain can only do two things, both reversible, both behind
+a human click. That restraint is deliberate.
+
+## Did we just trust an LLM to grade an LLM?
+
+Partly, yes — so we measured how good the grader is instead of assuming. We generated
+40 graded answers across all the combinations (honest prompt, aggressive prompt, strong
+model, cheap model) and had them labeled independently, then compared labels against
+the judge.
+
+Result: agreement on 38 of 40. The judge never flagged a good answer as bad (that
+matters — it means the alert doesn't cry wolf). It missed 2 of 7 bad ones, and both
+misses were the same trick: an answer where every sentence is true but it answers a
+*different question* than the one asked. A truthfulness grader can't see that, and
+neither can word overlap. Checking "did you answer the actual question" is a separate
+grader we haven't built yet. It's the clearest next step, and we know that because the
+measurement told us.
+
+Honesty note: the independent labels came from an AI assistant reading each answer
+against the documents, not from human annotators. So this measures two graders
+agreeing, not ground truth. It's in the repo (`chaos/calibration/`) if you want to
+re-label it yourself.
+
+## The numbers, in one place
+
+| What | Measured |
+|---|---|
+| Alert fired at | grounded ratio 0.80 (threshold 0.85, 10-min window) |
+| Unattended incident at 03:33 | fired at 0.75, self-healed, resolved 12 min later |
+| Alert → verified recovery (drill) | 2 min 49 s |
+| Judge calls saved by the cheap check | ~73% at healthy baseline |
+| Judge vs independent labels | 38/40 agree, no false alarms |
+| Load test | 100 claims, 3.2 min, 0 errors, zero new metric series |
+
+## If you run LLMs in production, steal these
+
+1. Put a quality score on every response, attached to the trace. Even a crude one.
+   You cannot debug what you cannot see.
+2. Alert on a windowed ratio with an explicit target, never on single scores.
+3. Timeout every LLM call. The default is infinite.
+4. "Process is alive" is not health. "Recently did useful work" is health.
+5. If you use an LLM judge, measure it against independent labels before you trust it
+   with your pager.
 
 ## Disclosures
 
-We prototyped the eval-to-trace idea in a pre-kickoff warm-up experiment; this
-repository is a clean-room build (no warm-up code copied). An AI coding assistant was
-used heavily during development — including operating the overnight autonomous runs; all
-design decisions and reviews are ours. The calibration set's independent labels were
-produced by the AI assistant, not human annotators — the report measures judge
-agreement, not correctness.
+We prototyped the score-on-the-trace idea in a pre-hackathon warm-up post; this repo is
+a fresh build with no code copied from it. An AI coding assistant did a lot of the
+building and ran the overnight tests; the design calls and the reviews are ours. The
+calibration labels are AI-produced, as stated above.

@@ -168,13 +168,12 @@ This is what happens for every single claim, both in the loop and in a batch run
      are visible per-claim. `EVAL_JUDGE_MODE=all` disables the gating.
 
 5. **Emit the verdict everywhere it is needed:**
-   - **On the root span** (for drill-down in one exact trace), using the exact attribute
-     names from the OpenTelemetry GenAI semantic conventions: `gen_ai.evaluation.name`,
-     `gen_ai.evaluation.score.value`, `gen_ai.evaluation.score.label`,
-     `gen_ai.evaluation.explanation`.
-   - **As a `gen_ai.evaluation.result` event** — a log record in the same trace context.
-     This is the emission shape the conventions actually standardize; we emit it in
-     addition to the span attributes.
+   - **On the root span**, so you can open one request and see its verdict. The
+     attribute names are the standard OpenTelemetry ones, not invented:
+     `gen_ai.evaluation.name`, `gen_ai.evaluation.score.value`,
+     `gen_ai.evaluation.score.label`, `gen_ai.evaluation.explanation`.
+   - **As a log event** named `gen_ai.evaluation.result` — the format the OpenTelemetry
+     standard recommends for verdicts. We emit both this and the span attributes.
    - **As a metric** (for charts and alerts): the score is recorded on the
      `gen_ai.evaluation.score` histogram with only bounded, low-cardinality labels
      (`service.name`, `eval.name`, `model`, `customer.tier`, `label`, `prompt.version`).
@@ -296,12 +295,11 @@ A second, separate service. Its whole loop:
 1. **Receive** the SigNoz alert webhook (`POST /webhook` on port 8090). The alert
    channel `homeostat-brain` is already configured in SigNoz and carries both fire and
    resolve notifications.
-2. **Investigate** through the SigNoz MCP server with a *fixed, bounded playbook*
-   (`brain/skill.md`): faithfulness score by `prompt.version` in the incident window vs
-   a baseline window, the same by `model`, and a check that the traditional signals
-   (claim error rate, p99 latency) did NOT move. The brain cannot ask an unbounded
-   question, so it cannot hallucinate a root cause — every claim in its report carries
-   the numbers it was computed from.
+2. **Investigate** by asking SigNoz the same four questions every time (the checklist
+   is in `brain/skill.md`): score per prompt version now vs an hour ago; score per
+   model; did error rate or latency move; which older version was still healthy. It is
+   a fixed checklist, not a free-thinking AI — it cannot invent a root cause, because
+   it can only report the numbers it queried.
 3. **Report** to Slack as an evidence-linked message with **Approve heal / Reject**
    buttons. Button clicks arrive over Slack Socket Mode — a websocket the brain opens
    outward — so the brain needs no public endpoint.

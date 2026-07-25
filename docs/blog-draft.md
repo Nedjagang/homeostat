@@ -6,20 +6,19 @@
 > DRAFT NOTE (delete before publishing): add a real screenshot at every `[SCREENSHOT]`
 > marker. Then do a voice pass — rewrite anything you wouldn't say out loud.
 
-Let me be upfront about what this is: a hackathon project. There's no company running
-this, no real customers. We built a fake insurance company on purpose — twenty
-synthetic policy documents, a claims bot that answers questions about them — because we
-wanted to study one question properly:
+We were about an hour into testing our claims bot when it told its first lie.
 
-**If an AI agent starts confidently making things up, would standard monitoring even
-notice?**
+The bot answers insurance questions over a set of policy documents — collision
+deductibles, water damage limits, that kind of thing. We built it for the Agents of
+SigNoz hackathon to chase a question that had been bugging us at work: **if an AI agent
+starts confidently making things up, would standard monitoring even notice?**
 
 We suspected the answer was no. We didn't expect to prove it in the first hour.
 
 ## The lie that started it
 
-One of our test questions asks: "Does HP-100 cover earthquake damage to my
-foundation?" Our policy corpus says nothing about earthquakes — nothing to cover it,
+One of the test questions asks: "Does HP-100 cover earthquake damage to my
+foundation?" The policy documents say nothing about earthquakes — nothing to cover it,
 nothing to exclude it. The only honest answer is "the policy doesn't say."
 
 Under the right (wrong) conditions, our bot answered: earthquake damage is
@@ -181,8 +180,7 @@ ground truth. The set is in the repo if you want to re-label it.
 
 ## What I'd tell you if you run agents for real
 
-We don't run this in production — it's a lab we built to break things honestly. But
-the failure modes we hit are not lab-specific, and neither are the fixes:
+None of the failure modes we hit are specific to our setup, and neither are the fixes:
 
 1. Put a quality score on every LLM response, attached to the trace. Even a crude one.
    You can't debug what you can't see.
@@ -194,9 +192,8 @@ the failure modes we hit are not lab-specific, and neither are the fixes:
 If you try this on your own agent — even just step 1 — I'd genuinely love to hear what
 your first lying trace looked like.
 
-*Disclosures: built for the Agents of SigNoz hackathon on synthetic data (fake insurer,
-fake policies, fake claims — that's the point: we could break it freely). We prototyped
-the score-on-the-trace idea in our warm-up entry for this event; this repo is a fresh
-build with no code copied from it. An AI coding assistant did much of the building and
-ran the overnight tests; design decisions and reviews are ours. Calibration labels are
-AI-produced, as stated above.*
+*Disclosures: built for the Agents of SigNoz hackathon on synthetic policy data. We
+prototyped the score-on-the-trace idea in our warm-up entry for this event; this repo
+is a fresh build with no code copied from it. An AI coding assistant did much of the
+building and ran the overnight tests; design decisions and reviews are ours.
+Calibration labels are AI-produced, as stated above.*

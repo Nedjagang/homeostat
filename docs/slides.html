@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Homeostat — Agents of SigNoz</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root{
+    --surface:#141413; --panel:#1a1a19; --line:#2e2e2c;
+    --ink:#ffffff; --ink-2:#c3c2b7; --ink-3:#8a897f;
+    --good:#008300; --bad:#e66767; --accent:#3987e5; --warn:#c98500;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:var(--surface);color:var(--ink);
+    font-family:system-ui,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  .slide{position:absolute;inset:0;display:none;flex-direction:column;
+    justify-content:center;padding:6vh 8vw;gap:3.2vh}
+  .slide.on{display:flex}
+  .kicker{font-size:2.2vh;letter-spacing:.35em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+  h1{font-size:7.2vh;line-height:1.06;font-weight:800;letter-spacing:-.015em}
+  h1 .dim{color:var(--ink-2);font-weight:700}
+  h2{font-size:5.4vh;line-height:1.1;font-weight:800;letter-spacing:-.01em}
+  .sub{font-size:2.8vh;color:var(--ink-2);line-height:1.45;max-width:62ch}
+  .foot{position:absolute;bottom:4vh;left:8vw;right:8vw;display:flex;
+    justify-content:space-between;font-size:1.9vh;color:var(--ink-3)}
+  .chip{display:inline-block;padding:.35em .8em;border-radius:.5em;font-size:2.2vh;font-weight:700}
+  .chip.good{background:var(--good);color:#fff}
+  .chip.bad{background:var(--bad);color:#141413}
+  .chip.ghost{border:1px solid var(--line);color:var(--ink-2)}
+  .row{display:flex;gap:1.6vw;flex-wrap:wrap;align-items:center}
+  .quote{background:var(--panel);border:1px solid var(--line);border-radius:1.2vh;
+    padding:3vh 3vw;font-size:3.1vh;line-height:1.5;max-width:78vw}
+  .quote .q{color:var(--ink-2)}
+  .quote .a{font-weight:700}
+  .tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:2.4vh 2vw}
+  .tile{background:var(--panel);border:1px solid var(--line);border-radius:1.2vh;
+    padding:3.4vh 2vw 3vh;display:flex;flex-direction:column;gap:1vh}
+  .tile .num{font-size:6.4vh;font-weight:800;letter-spacing:-.02em;line-height:1}
+  .tile .lbl{font-size:2vh;color:var(--ink-2);line-height:1.35}
+  .steps{display:flex;flex-direction:column;gap:2.2vh;font-size:3vh;line-height:1.4}
+  .steps b{color:var(--ink)}
+  .steps .n{display:inline-flex;width:4.4vh;height:4.4vh;border-radius:50%;
+    background:var(--panel);border:1px solid var(--line);align-items:center;
+    justify-content:center;font-size:2.3vh;font-weight:800;margin-right:1.4vw;color:var(--ink-2)}
+  /* architecture */
+  .arch{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:0 1vw;align-items:stretch}
+  .node{background:var(--panel);border:1px solid var(--line);border-radius:1.2vh;padding:2.6vh 1.6vw}
+  .node h3{font-size:2.8vh;margin-bottom:1.2vh}
+  .node ul{list-style:none;font-size:2vh;color:var(--ink-2);line-height:1.65}
+  .node ul b{color:var(--ink)}
+  .arrow{display:flex;align-items:center;font-size:4.5vh;color:var(--ink-3);font-weight:300}
+  .loop{margin-top:2.4vh;text-align:center;font-size:2.2vh;color:var(--ink-2);
+    border:1px dashed var(--line);border-radius:1.2vh;padding:1.6vh}
+  .loop b{color:var(--ink)}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:2vw}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:1.2vh;padding:3vh 1.8vw}
+  .card h3{font-size:2.9vh;margin-bottom:1.4vh;line-height:1.25}
+  .card p{font-size:2.1vh;color:var(--ink-2);line-height:1.5}
+  .tag{font-size:1.8vh;font-weight:800;letter-spacing:.2em;text-transform:uppercase;margin-bottom:1.6vh}
+  .tag.free{color:var(--good)} .tag.paid{color:var(--warn)} .tag.broke{color:var(--bad)}
+  .huge{font-size:13vh;font-weight:800;letter-spacing:-.03em;line-height:1}
+  .center{align-items:center;text-align:center}
+  .center .sub{margin:0 auto}
+  code{font-family:Consolas,monospace;background:var(--panel);border:1px solid var(--line);
+    border-radius:.4em;padding:.1em .45em;font-size:.92em;color:var(--ink-2)}
+</style>
+</head>
+<body data-palette="#008300,#e66767,#3987e5,#c98500">
+
+<!-- 1 · TITLE -->
+<section class="slide on center">
+  <div class="kicker">Homeostat · Team BunkBros</div>
+  <h1>Your AI agent is lying.<br><span class="dim">Every dashboard is green.</span></h1>
+  <p class="sub">Faithfulness as a golden signal in SigNoz — caught on the trace,
+  alerted as an SLO, healed with one keypress of human approval.</p>
+  <div class="foot"><span>Agents of SigNoz · Track 1</span><span>github.com/Nedjagang/homeostat</span></div>
+</section>
+
+<!-- 2 · THE PROBLEM -->
+<section class="slide">
+  <div class="kicker">The problem</div>
+  <div class="quote">
+    <div class="q">“Does HP-100 cover earthquake damage?”</div>
+    <div class="a">“Earthquake damage is <u>specifically excluded</u>.”&nbsp;
+      <span class="chip bad">fabricated — no such clause exists</span></div>
+  </div>
+  <div class="row">
+    <span class="chip good">Latency ✓ normal</span>
+    <span class="chip good">Cost ✓ normal</span>
+    <span class="chip good">Errors ✓ zero</span>
+  </div>
+  <h2>Monitoring measures whether it <span style="color:var(--ink-2)">answered</span> —<br>not whether it was <em>true</em>.</h2>
+  <div class="foot"><span>Homeostat</span><span>2 / 10</span></div>
+</section>
+
+<!-- 3 · THE IDEA -->
+<section class="slide">
+  <div class="kicker">The idea</div>
+  <h2>Make truthfulness a golden signal.</h2>
+  <div class="steps">
+    <div><span class="n">1</span><b>Grade every answer</b> against the documents the agent actually retrieved.</div>
+    <div><span class="n">2</span><b>Attach the verdict to the exact trace</b> — standard OTel <code>gen_ai.evaluation.*</code> attributes.</div>
+    <div><span class="n">3</span><b>Alert on it like an SLO</b> — and close the loop with an evidence-driven, human-approved heal.</div>
+  </div>
+  <div class="foot"><span>Homeostat</span><span>3 / 10</span></div>
+</section>
+
+<!-- 4 · ARCHITECTURE (Clip 1.5) -->
+<section class="slide">
+  <div class="kicker">Architecture</div>
+  <div class="arch">
+    <div class="node">
+      <h3>ClaimPilot <span style="color:var(--ink-3);font-weight:400">· the agent</span></h3>
+      <ul>
+        <li>LangChain + RAG over policies</li>
+        <li>OpenLIT auto-instrumentation</li>
+        <li><b>Eval funnel on every answer</b></li>
+        <li>· Tier 0 deterministic — <b>$0</b></li>
+        <li>· Tier 1 lexical overlap — <b>$0</b></li>
+        <li>· Tier 2 LLM judge — paid, gated</li>
+      </ul>
+    </div>
+    <div class="arrow">→</div>
+    <div class="node">
+      <h3>SigNoz <span style="color:var(--ink-3);font-weight:400">· self-hosted</span></h3>
+      <ul>
+        <li>Verdict on the <b>exact trace</b></li>
+        <li>Quality vs traditional dashboards</li>
+        <li><b>SLO 98% grounded</b></li>
+        <li>7.5× burn-rate alert, 10-min window</li>
+        <li>MCP server built in</li>
+      </ul>
+    </div>
+    <div class="arrow">→</div>
+    <div class="node">
+      <h3>The Brain <span style="color:var(--ink-3);font-weight:400">· the healer</span></h3>
+      <ul>
+        <li>Investigates via <b>SigNoz MCP</b></li>
+        <li>Fixed 4-question checklist</li>
+        <li>Evidence → Slack buttons</li>
+        <li>No click? <b>Phone rings</b> — press 1</li>
+        <li>Verifies recovery on the same SLI</li>
+      </ul>
+    </div>
+  </div>
+  <div class="loop">⟲ approved heal: <b>pin_prompt_version</b> → SLI recovers → incident saved as a <b>regression test</b> — and the brain traces itself into the same SigNoz</div>
+  <div class="foot"><span>Homeostat</span><span>4 / 10</span></div>
+</section>
+
+<!-- 5 · THE FUNNEL -->
+<section class="slide">
+  <div class="kicker">The judge is expensive — so it goes last</div>
+  <div class="cards">
+    <div class="card"><div class="tag free">Tier 0 · free</div>
+      <h3>Answered with nothing retrieved?</h3><p>Fabricated by definition. Score 0, done.</p></div>
+    <div class="card"><div class="tag free">Tier 1 · free</div>
+      <h3>Word overlap with the docs</h3><p>Grounded answers quote the policy. High overlap → cleared, no judge call.</p></div>
+    <div class="card"><div class="tag paid">Tier 2 · paid</div>
+      <h3>LLM judge</h3><p>Score 0–1 + one-line reason. Only suspicious answers + a 2% honesty sample.</p></div>
+  </div>
+  <h2><span style="color:var(--good)">~73% fewer judge calls</span> — and the alert still fires.</h2>
+  <div class="foot"><span>Homeostat</span><span>5 / 10</span></div>
+</section>
+
+<!-- 6 · THE SLO -->
+<section class="slide center">
+  <div class="kicker">Not a magic threshold — an SLO</div>
+  <div class="huge">98%<span style="font-size:4vh;color:var(--ink-2)"> grounded</span></div>
+  <p class="sub">Fire when a <b>10-minute window</b> burns the 2% error budget <b>7× too fast</b>.<br>
+  Single scores are noisy — the same claim scored 0.2 and 0.96 on different runs.<br>
+  <b>Windowed ratios. Never single scores.</b></p>
+  <div class="foot"><span>Homeostat</span><span>6 / 10</span></div>
+</section>
+
+<!-- 7 · THE BRAIN -->
+<section class="slide">
+  <div class="kicker">The brain — restraint as a feature</div>
+  <div class="steps">
+    <div><span class="n">1</span>Score per <b>prompt version</b> — incident window vs baseline?</div>
+    <div><span class="n">2</span>Score per <b>model</b>?</div>
+    <div><span class="n">3</span>Did <b>latency or errors</b> move? (Then it’s not a quality regression.)</div>
+    <div><span class="n">4</span>Which older version was still <b>healthy</b>? ← the rollback target, read from telemetry</div>
+  </div>
+  <h2>Evidence → Slack. Silence → <span style="color:var(--accent)">the phone rings.</span></h2>
+  <p class="sub"><b>No approval, no action — ever.</b> Two allowlisted reversible actions. Doesn’t recover? Escalate, don’t retry.</p>
+  <div class="foot"><span>Homeostat</span><span>7 / 10</span></div>
+</section>
+
+<!-- 8 · SCOREBOARD -->
+<section class="slide">
+  <div class="kicker">Measured, not promised</div>
+  <div class="tiles">
+    <div class="tile"><div class="num">2m 49s</div><div class="lbl">alert → verified recovery, live drill</div></div>
+    <div class="tile"><div class="num">03:33</div><div class="lbl">unattended incident: fired, healed, resolved in 12 min — while we slept</div></div>
+    <div class="tile"><div class="num">38/40</div><div class="lbl">judge vs independent labels (κ = 0.80)</div></div>
+    <div class="tile"><div class="num">0</div><div class="lbl">false alarms — the alert never cried wolf</div></div>
+    <div class="tile"><div class="num">73%</div><div class="lbl">judge calls eliminated by the free tiers</div></div>
+    <div class="tile"><div class="num">+0</div><div class="lbl">new metric series after a 100-claim load test</div></div>
+  </div>
+  <div class="foot"><span>Homeostat</span><span>8 / 10</span></div>
+</section>
+
+<!-- 9 · WHAT BROKE -->
+<section class="slide">
+  <div class="kicker">What genuinely broke — four postmortems in the repo</div>
+  <div class="cards">
+    <div class="card"><div class="tag broke">Bug 1</div>
+      <h3>The model refused to lie</h3><p>Strong models resist bad prompts. Real regressions ship as <b>releases</b>: prompt + cheaper model, together.</p></div>
+    <div class="card"><div class="tag broke">Bug 2</div>
+      <h3>−7,885-second timeout</h3><p>Laptop suspend → dead sockets → LLM client with <b>no default timeout</b> froze the loop while “alive” stayed green.</p></div>
+    <div class="card"><div class="tag broke">Bug 3</div>
+      <h3><code>MODEL=5440</code></h3><p>Dell ships a factory env var <code>Model</code>. Windows env is case-insensitive. Our bot tried to call a deployment named “5440”.</p></div>
+  </div>
+  <div class="foot"><span>Homeostat</span><span>9 / 10</span></div>
+</section>
+
+<!-- 10 · CLOSE -->
+<section class="slide center">
+  <div class="kicker">Homeostat</div>
+  <h1>Catches lies.<br><span class="dim">Rings phones. Heals itself.</span></h1>
+  <p class="sub">Dashboards, alert packs, chaos flags, calibration set, postmortems — one script
+  recreates it all on any fresh SigNoz.</p>
+  <div class="row" style="justify-content:center">
+    <span class="chip ghost">github.com/Nedjagang/homeostat</span>
+    <span class="chip ghost">Team BunkBros</span>
+  </div>
+  <div class="foot"><span>Agents of SigNoz · Track 1</span><span>10 / 10</span></div>
+</section>
+
+<script>
+  const slides=[...document.querySelectorAll('.slide')];let i=0;
+  function show(n){i=Math.max(0,Math.min(slides.length-1,n));
+    slides.forEach((s,k)=>s.classList.toggle('on',k===i));}
+  addEventListener('keydown',e=>{
+    if(['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){e.preventDefault();show(i+1);}
+    if(['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){e.preventDefault();show(i-1);}
+    if(e.key==='Home')show(0); if(e.key==='End')show(slides.length-1);});
+  addEventListener('click',e=>{ if(e.clientX>innerWidth/2) show(i+1); else show(i-1);});
+</script>
+</body>
+</html>

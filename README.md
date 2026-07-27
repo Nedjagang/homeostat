@@ -91,6 +91,8 @@ Full build order, gates, and the 4-person split live in the team build doc (kept
 Agent & Eval (the moat) · SigNoz & data-plane · Brain & remediation · Rigor & adoption. See the build doc.
 
 ---
+##Demo video link
+https://youtu.be/9ib68b4fTWc
 
 ## Disclosures
 
